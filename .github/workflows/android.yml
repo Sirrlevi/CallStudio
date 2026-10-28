@@ -35,7 +35,14 @@ jobs:
             exit 1
           fi
 
-          yes | "$SDKMANAGER" --licenses >/dev/null
+          if yes | "$SDKMANAGER" --licenses >/dev/null; then
+            :
+          else
+            status=$?
+            if [ "$status" -ne 141 ]; then
+              exit "$status"
+            fi
+          fi
           "$SDKMANAGER" --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Set up Gradle
