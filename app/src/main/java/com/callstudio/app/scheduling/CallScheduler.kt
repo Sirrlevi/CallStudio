@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import com.callstudio.app.CallAlarmReceiver
 import com.callstudio.app.data.ScheduledCall
 
 object CallScheduler {
