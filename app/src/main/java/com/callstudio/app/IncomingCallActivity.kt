@@ -946,7 +946,7 @@ private fun TruecallerActiveCallScreen(
 
     Box(Modifier.fillMaxSize().background(TruecallerGradient).padding(top = 24.dp, bottom = 24.dp)) {
         Column(
-            Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(top = 26.dp, horizontal = 18.dp),
+            Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(top = 26.dp, start = 18.dp, end = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             TruecallerBrandHeader("${formatClock(elapsed)} | ${phone.ifBlank { "Mobile" }}")
