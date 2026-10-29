@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -43,10 +43,23 @@ jobs:
       - name: Verify APK exists
         run: test -s app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Upload installable APK
+      - name: Upload installable APK artifact
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: CallStudio-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish APK download release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view debug-latest >/dev/null 2>&1; then
+            gh release delete debug-latest --cleanup-tag --yes
+          fi
+          gh release create debug-latest app/build/outputs/apk/debug/app-debug.apk \
+            --target "$GITHUB_SHA" \
+            --title "CallStudio debug APK" \
+            --notes "Debug APK built from commit $GITHUB_SHA. This is a test build, not a Play Store release."
