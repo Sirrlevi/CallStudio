@@ -390,7 +390,7 @@ fun CallerEditorDialog(existing: CallerProfile?, onDismiss: () -> Unit, onSave: 
                         ContactsContract.Contacts.CONTENT_URI,
                         photoProjection,
                         "${ContactsContract.Contacts._ID} = ?",
-                        arrayOf(selectedContactId),
+                        arrayOf(selectedContactId.orEmpty()),
                         null
                     )?.use { cursor ->
                         if (cursor.moveToFirst()) {
