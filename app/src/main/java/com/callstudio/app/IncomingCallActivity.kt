@@ -18,7 +18,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
@@ -43,7 +42,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.input.pointer.consume
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -710,7 +708,7 @@ private fun TruecallerIncomingScreen(
 
     Box(Modifier.fillMaxSize().background(TruecallerGradient).padding(top = 24.dp, bottom = 24.dp)) {
         Column(
-            Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(top = 26.dp, horizontal = 18.dp),
+            Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(top = 26.dp, start = 18.dp, end = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             TruecallerBrandHeader("Call from ${phone.ifBlank { "Mobile" }}")
@@ -895,7 +893,7 @@ private fun TruecallerDragActionButton(
                 },
                 onDrag = { change, dragAmount ->
                     change.consume()
-                    distance.snapTo((distance.value - dragAmount.y).coerceIn(0f, maxDrag))
+                    scope.launch { distance.snapTo((distance.value - dragAmount.y).coerceIn(0f, maxDrag)) }
                 }
             )
         },
