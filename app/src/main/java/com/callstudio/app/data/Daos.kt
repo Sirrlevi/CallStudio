@@ -1,44 +1,76 @@
 package com.callstudio.app.data
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CallerDao {
-    @Query("SELECT * FROM caller_profiles ORDER BY name COLLATE NOCASE") fun observeAll(): Flow<List<CallerProfile>>
-    @Query("SELECT * FROM caller_profiles WHERE id = :id LIMIT 1") suspend fun findById(id: Long): CallerProfile?
-    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insert(item: CallerProfile): Long
-    @Update suspend fun update(item: CallerProfile)
-    @Delete suspend fun delete(item: CallerProfile)
+    @Query("SELECT * FROM callers ORDER BY name COLLATE NOCASE")
+    fun observeAll(): Flow<List<CallerEntity>>
+
+    @Query("SELECT * FROM callers WHERE id = :id")
+    suspend fun get(id: Long): CallerEntity?
+
+    @Query("SELECT * FROM callers ORDER BY lastUsedAt DESC, id LIMIT 1")
+    suspend fun mostRecentlyUsed(): CallerEntity?
+
+    @Insert
+    suspend fun insert(caller: CallerEntity): Long
+
+    @Update
+    suspend fun update(caller: CallerEntity)
+
+    @Query("DELETE FROM callers WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("UPDATE callers SET lastUsedAt = :time WHERE id = :id")
+    suspend fun touch(id: Long, time: Long)
 }
 
 @Dao
-interface ScheduledCallDao {
-    @Query("SELECT * FROM scheduled_calls WHERE state = 'SCHEDULED' ORDER BY triggerAtMillis") fun observePending(): Flow<List<ScheduledCall>>
-    @Query("SELECT * FROM scheduled_calls WHERE state = 'SCHEDULED' ORDER BY triggerAtMillis") suspend fun getPending(): List<ScheduledCall>
-    @Query("SELECT * FROM scheduled_calls WHERE id = :id LIMIT 1") suspend fun findById(id: Long): ScheduledCall?
-    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insert(item: ScheduledCall): Long
-    @Update suspend fun update(item: ScheduledCall)
-    @Query("UPDATE scheduled_calls SET state = :state WHERE id = :id") suspend fun updateState(id: Long, state: String)
-    @Query("UPDATE scheduled_calls SET state = 'RINGING' WHERE id = :id AND state = 'SCHEDULED'") suspend fun claimForRinging(id: Long): Int
-    @Delete suspend fun delete(item: ScheduledCall)
-}
+interface CallDao {
+    @Insert
+    suspend fun insert(event: CallEventEntity): Long
 
-@Dao
-interface CallHistoryDao {
-    @Query("SELECT * FROM call_history ORDER BY startedAtMillis DESC") fun observeAll(): Flow<List<CallHistory>>
-    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insert(item: CallHistory): Long
-    @Delete suspend fun delete(item: CallHistory)
+    @Update
+    suspend fun update(event: CallEventEntity)
+
+    @Query("SELECT * FROM calls WHERE id = :id")
+    suspend fun get(id: Long): CallEventEntity?
+
+    @Query("SELECT * FROM calls WHERE status = 'SCHEDULED' ORDER BY triggerAtMillis")
+    fun observeScheduled(): Flow<List<CallEventEntity>>
+
+    @Query("SELECT * FROM calls WHERE status = 'SCHEDULED'")
+    suspend fun getScheduled(): List<CallEventEntity>
+
+    @Query("SELECT * FROM calls WHERE status IN ('RINGING', 'ACTIVE')")
+    suspend fun getLive(): List<CallEventEntity>
+
+    @Query(
+        "SELECT * FROM calls WHERE status NOT IN ('SCHEDULED', 'RINGING', 'ACTIVE') " +
+            "ORDER BY COALESCE(endedAtMillis, triggerAtMillis) DESC"
+    )
+    fun observeHistory(): Flow<List<CallEventEntity>>
+
+    @Query("DELETE FROM calls WHERE status NOT IN ('SCHEDULED', 'RINGING', 'ACTIVE')")
+    suspend fun clearHistory()
 }
 
 @Dao
 interface RecordingDao {
-    @Query("SELECT * FROM recordings ORDER BY createdAtMillis DESC") fun observeAll(): Flow<List<RecordingItem>>
-    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insert(item: RecordingItem): Long
-    @Delete suspend fun delete(item: RecordingItem)
+    @Query("SELECT * FROM recordings ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<RecordingEntity>>
+
+    @Query("SELECT * FROM recordings")
+    suspend fun getAll(): List<RecordingEntity>
+
+    @Insert
+    suspend fun insert(recording: RecordingEntity): Long
+
+    @Query("DELETE FROM recordings WHERE id = :id")
+    suspend fun delete(id: Long)
 }

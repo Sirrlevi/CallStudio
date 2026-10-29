@@ -1,55 +1,77 @@
 # CallStudio
 
-CallStudio is a native Kotlin + Jetpack Compose Android app for scheduling local incoming-call experiences. It does not place phone-network calls and does not transmit imported audio to another phone.
+CallStudio is a native Android app (Kotlin, Jetpack Compose, Material 3) that creates a **local, call-like experience on your own phone**: custom callers, scheduled "incoming calls", themed ringing and in-call screens, a caller voice clip played on the device, and optional microphone recording.
 
-## Included in this project
+It does **not** place real calls, contact anyone, or send audio anywhere. There is no server, login or API key. Callers, schedules, settings, recordings and history stay on the device.
 
-- Local caller profiles with optional photo and contact selection.
-- Immediate incoming-call UI and scheduled calls, including delay in seconds and specific date/time.
-- Room persistence for caller profiles, schedules, call history and microphone recording metadata.
-- AlarmManager scheduling with exact-alarm access checks and an inexact fallback.
-- High-priority incoming-call notification with full-screen intent, Answer and Decline actions.
-- Foreground ringtone service, system ringtone picker, vibration setting and optional caller audio playback after answering.
-- Active-call timer, audio replay/pause, speaker routing controls and explicit microphone recording.
-- Six visual styles and DataStore-backed settings.
-- GitHub Actions test/build workflow which uploads a debug APK artifact.
+> **Build status:** this project was written without access to an Android SDK or the network, so it has **not been compiled or run yet**. The first GitHub Actions run is the first real build. See [Verification status](#verification-status).
 
-## Build on GitHub
+## Get the APK from GitHub Actions
 
-1. Create a new GitHub repository named `CallStudio` (or choose another empty repository).
-2. Upload the contents of this project folder to the repository root, including `.github/workflows/android.yml`, `gradlew`, `gradlew.bat`, `settings.gradle.kts` and `app/`.
-3. Ensure the default branch is named `main`, or change the branch filter in `.github/workflows/android.yml`.
-4. Open **Actions → Build CallStudio APK** and select **Run workflow**, or push a commit to `main`.
-5. Wait for the run to finish. A green run means the configured unit tests and debug build completed successfully.
-6. Open the successful run, scroll to **Artifacts**, and download **CallStudio-debug-apk**.
-7. Extract the downloaded ZIP, install `app-debug.apk` on the phone, and approve Android's installation prompt.
+1. Push this project to a GitHub repository (branch `main`). The workflow in `.github/workflows/android.yml` runs on every push to `main`. You can also start it manually: **Actions** tab → **Android CI** → **Run workflow**.
+2. Open the repository's **Actions** tab and click the most recent **Android CI** run. A green check means unit tests and the build passed. A red cross means something failed: open the failing step for the log.
+3. Scroll to the **Artifacts** section at the bottom of the run page and click **CallStudio-debug-apk** to download a zip (kept for 30 days).
+4. Unzip it. Inside is `app-debug.apk`.
+5. Copy the APK to your phone (or download the artifact on the phone directly) and open it. If Android asks, allow your browser or file manager to **install unknown apps**, then tap **Install**. This is a debug-signed build for personal use.
 
-The workflow builds the APK at `app/build/outputs/apk/debug/app-debug.apk` and uploads that exact file. The debug APK is not a Play Store release and is not signed with a private release key.
+## Turn on what the app needs
 
-## Local build
+Open CallStudio → **Settings → Permissions and setup**. It shows live status and a button for each item:
 
-You need JDK 17, Android SDK Platform 36, Android Build Tools 36.0.0 and internet access to resolve Gradle/Maven dependencies. Open the folder in Android Studio or run:
+| Item | Why | Where |
+| --- | --- | --- |
+| Notifications | Calls arrive as notifications (Android 13+ asks at runtime). | Allow notifications |
+| Full-screen call screen | Lets a call take over the screen, including when locked (Android 14+ special access). Without it the call is a banner you tap. | Open settings → allow "full-screen notifications" |
+| Exact timing | Calls ring at the chosen second (Android 12+ special access). Without it Android may deliver a call a few minutes late, and the app says so. | Open settings → allow "alarms & reminders" |
+| Microphone | Only when you tap **Record** during a call. Nothing records on its own. | Asked at that moment |
 
-```bash
-./gradlew testDebugUnitTest
-./gradlew assembleDebug
+Contacts need **no permission**: the system contact picker hands the app only the contact you choose.
+
+## Using it
+
+- **Callers**: add from contacts or create a custom caller (name, number, photo). Photos are copied into app storage, so they keep working after restarts.
+- **Call now / delayed / at a time**: from Home, or the Schedule screen (seconds, minutes, or a date and time). Scheduled calls are listed under **Scheduled**, where you can reschedule or cancel them.
+- **Themes**: six complete themes (Pixel, One UI, iOS, Vivo, Minimal dark, Minimal light) with different layouts, type and controls. Pick one under **Settings → Call theme**; thumbnails are the real screens.
+- **Audio**: ringtone (default, system sound, your own file, or none), vibration, and a caller voice clip (play once, repeat, or manual). The clip finishing never ends the call; only **End call** does.
+- **Recording**: tap **Record** in the call screen. Mute silences your microphone in the recording. Recordings are microphone-only 16-bit WAV files, listed under **Settings → Recordings**.
+
+## Build locally
+
+Requirements: JDK 17, Android SDK 35, Gradle 8.9.
+
+```
+gradle :app:testDebugUnitTest   # unit tests
+gradle :app:assembleDebug       # APK at app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The included `gradlew` is a lightweight Gradle bootstrap script because the standard Gradle wrapper JAR is not bundled. It downloads Gradle 8.13 into the Gradle user cache the first time it runs. On Windows use `gradlew.bat`.
+No Gradle wrapper is committed (its binary jar could not be generated offline). Run `gradle wrapper --gradle-version 8.9` once if you want `./gradlew`; the CI workflow does not need it.
 
-## First-launch setup
+Instrumentation tests (`app/src/androidTest`) need a device or emulator: `gradle :app:connectedDebugAndroidTest`.
 
-Open **Settings** and review Notifications, Exact alarms and Full-screen incoming call. Grant the access that Android offers for your device. You can also choose a system ringtone, import caller audio and choose one of the six themes.
+## Design notes
 
-To test an incoming call, create a caller profile first, then tap **Start incoming call** or schedule a delay. Use **Answer** or **Decline** to finish the ringing stage. After answering, use **End call** to finish the session.
+- `domain/`: pure Kotlin, unit tested: call state machine (`SCHEDULED → RINGING → ACTIVE → ENDED`, plus cancelled / rejected / missed / error), schedule math, duplicate rule, reboot-recovery planner.
+- `scheduling/`: `AlarmManager` (exact when allowed, approximate otherwise, reported honestly), thin receivers, recovery after reboot, app update, clock or time-zone change.
+- `session/`: `CallSessionManager` owns the single live call; `CallService` is a thin foreground service. Ringing and active-call state are separate.
+- `notifications/`: call-style notifications, full-screen intent when allowed, unique `PendingIntent` request codes per call and action.
+- `audio/`, `recording/`: ringtone, caller voice, routing, and microphone recorder, each released when the call ends.
+- `data/`, `preferences/`: Room (callers, calls/history, recordings) and DataStore (settings).
+- `ui/`: Compose screens and the six call themes.
 
-## Important Android limitations
+## Limits you should know about
 
-- The app creates a local call-like screen; it is not an actual cellular, VoIP or SIM call.
-- Imported caller audio plays on the same phone after answering. It is not transmitted to a remote caller.
-- The recording feature records the device microphone after explicit permission and user action. It does not secretly record telephone calls or capture another app's call audio. The UI labels the saved recording as a microphone recording.
-- Android 14+ may require the user to allow full-screen intents separately. If access is denied, Android may show a notification instead.
-- Exact alarms may be denied. In that case Android can delay a trigger; battery-management restrictions can vary by manufacturer.
-- Force-stopping the app can prevent alarms from firing until the user opens the app again.
-- The current call session is intended for local testing. Verify lock-screen display, ringtone behaviour, permissions, and scheduling on the target phone after installing the APK.
-- A build workflow has been added, but no APK is included in this source archive because this workspace has no Android SDK/Gradle installation and could not run the Android build locally. The APK becomes downloadable after the GitHub Actions workflow successfully completes.
+- Android and OEM skins differ. Some devices hide full-screen calls or restrict background audio; the app falls back to a normal notification and shows what is missing in Setup.
+- The app respects silent mode and Do Not Disturb; it does not bypass them.
+- Force-stopping the app cancels its alarms. Opening the app once re-arms them.
+- Calls that fall due while the phone is off ring on boot only if they are less than 2 minutes overdue; otherwise they are recorded as missed.
+- Recording captures the microphone only. It does not capture a phone line or other apps. If the caller clip plays on speaker, the microphone may pick it up acoustically.
+- If Android refuses to start the background service (for example on some Android 15 boot paths), ringing falls back to a notification with the system ringtone.
+- Mute affects microphone recording. When nothing is recording it only remembers the setting and says so.
+
+## Verification status
+
+| Check | Status |
+| --- | --- |
+| Source written, unit and instrumentation tests written | Done |
+| Gradle build, unit tests, `assembleDebug` | **Not run** (no SDK or network where this was written). Run in GitHub Actions. |
+| Behaviour on a phone or emulator (ringing, lock-screen, audio routing, recording, notifications) | **Not verified** |

@@ -2,43 +2,48 @@ package com.callstudio.app.data
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.callstudio.app.domain.CallStatus
 
-@Entity(tableName = "caller_profiles")
-data class CallerProfile(
+@Entity(tableName = "callers")
+data class CallerEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val phone: String,
-    val photoUri: String? = null
+    /** File name inside the app-private photos folder (not a URI, so it survives restarts). */
+    val photoFile: String? = null,
+    val createdAt: Long,
+    val lastUsedAt: Long = 0,
 )
 
-@Entity(tableName = "scheduled_calls")
-data class ScheduledCall(
+/** One row per scheduled call; the status column doubles as call history once the call is finished. */
+@Entity(tableName = "calls")
+data class CallEventEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val callerId: Long,
-    val triggerAtMillis: Long,
-    val voiceUri: String? = null,
-    val repeatVoice: Boolean = false,
-    val state: String = "SCHEDULED",
-    val createdAtMillis: Long = System.currentTimeMillis()
-)
-
-@Entity(tableName = "call_history")
-data class CallHistory(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val callerId: Long?,
     val callerName: String,
-    val phone: String,
-    val outcome: String,
-    val startedAtMillis: Long,
-    val durationSeconds: Long,
-    val scheduledCallId: Long? = null
+    val callerPhone: String,
+    val callerPhotoFile: String?,
+    val triggerAtMillis: Long,
+    /** ISO local date-time for "at a time" schedules; lets the call follow time-zone changes. */
+    val wallClock: String? = null,
+    val status: String,
+    val createdAt: Long,
+    val answeredAtMillis: Long? = null,
+    val endedAtMillis: Long? = null,
+    val exactAlarm: Boolean = false,
+    val endReason: String? = null,
 )
 
 @Entity(tableName = "recordings")
-data class RecordingItem(
+data class RecordingEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val filePath: String,
-    val label: String,
+    val fileName: String,
+    val createdAt: Long,
+    val durationMs: Long,
+    val sizeBytes: Long,
+    val sampleRate: Int,
+    val callerId: Long?,
     val callerName: String,
-    val createdAtMillis: Long,
-    val durationMillis: Long
 )
+
+fun CallEventEntity.callStatus(): CallStatus = CallStatus.parse(status)

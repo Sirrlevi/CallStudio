@@ -1,0 +1,75 @@
+package com.callstudio.app.ui.viewmodels
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.callstudio.app.container
+import com.callstudio.app.data.CallEventEntity
+import com.callstudio.app.data.CallerEntity
+import com.callstudio.app.domain.CallStatus
+import com.callstudio.app.domain.ScheduleSpec
+import com.callstudio.app.permissions.SystemAccess
+import com.callstudio.app.preferences.AppSettings
+import com.callstudio.app.scheduling.ScheduleCoordinator
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
+    private val c = app.container
+    private val ctx: Application = app
+
+    val callers: StateFlow<List<CallerEntity>?> =
+        c.callers.all.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val scheduled: StateFlow<List<CallEventEntity>?> =
+        c.db.callDao().observeScheduled().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val settings: StateFlow<AppSettings> =
+        c.settings.settings.stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
+    val session = c.sessions.session
+
+    suspend fun caller(id: Long): CallerEntity? = c.callers.get(id)
+    suspend fun event(id: Long): CallEventEntity? = c.db.callDao().get(id)
+
+    fun selectCaller(id: Long) {
+        viewModelScope.launch { c.settings.setLastCaller(id) }
+    }
+
+    /** Starts a ringing call right now; returns its id, or null when it couldn't start. */
+    suspend fun startNow(callerId: Long): Long? {
+        val live = c.sessions.session.value
+        if (live.isLive) return live.eventId
+        val caller = c.callers.get(callerId) ?: return null
+        return when (val outcome = c.coordinator.schedule(caller, ScheduleSpec.Immediate)) {
+            is ScheduleCoordinator.Outcome.Rejected -> null
+            is ScheduleCoordinator.Outcome.Scheduled -> {
+                c.settings.setLastCaller(caller.id)
+                c.callers.touch(caller.id)
+                c.sessions.onAlarm(outcome.event.id)
+                if (c.sessions.session.value.status == CallStatus.RINGING) outcome.event.id else null
+            }
+        }
+    }
+
+    suspend fun schedule(caller: CallerEntity, spec: ScheduleSpec, editingEventId: Long?): ScheduleCoordinator.Outcome {
+        val outcome = c.coordinator.schedule(caller, spec, editingEventId)
+        if (outcome is ScheduleCoordinator.Outcome.Scheduled) {
+            c.settings.setLastCaller(caller.id)
+            c.callers.touch(caller.id)
+        }
+        return outcome
+    }
+
+    fun cancel(eventId: Long) {
+        viewModelScope.launch { c.coordinator.cancel(eventId) }
+    }
+
+    fun exactAllowed(): Boolean = SystemAccess.exactAlarmsAllowed(ctx)
+
+    /** Human-readable list of things that would stop calls from showing up properly. */
+    fun setupGaps(): List<String> = buildList {
+        if (!SystemAccess.notificationsEnabled(ctx)) add("Notifications are off")
+        if (!SystemAccess.fullScreenAllowed(ctx)) add("Full-screen call screen is not allowed")
+        if (!SystemAccess.exactAlarmsAllowed(ctx)) add("Exact timing is not allowed")
+    }
+}
