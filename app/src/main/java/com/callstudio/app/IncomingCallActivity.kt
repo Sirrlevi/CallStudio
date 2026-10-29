@@ -206,6 +206,7 @@ private fun IncomingCallRoot(activity: IncomingCallActivity) {
     }
 }
 
+
 @Composable
 private fun IncomingScreen(
     themeName: String,
@@ -215,65 +216,227 @@ private fun IncomingScreen(
     onAnswer: () -> Unit,
     onDecline: () -> Unit
 ) {
-    val bg = MaterialTheme.colorScheme.background
-    val onBg = MaterialTheme.colorScheme.onBackground
-    val minimal = themeName.startsWith("Minimal")
-    val ios = themeName == "iOS inspired"
-    val samsung = themeName == "Samsung One UI"
-    val avatarSize = when { minimal -> 116.dp; ios -> 168.dp; samsung -> 132.dp; else -> 150.dp }
-    val shell = if (themeName == "Vivo inspired") {
-        Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.20f), bg, bg)))
-    } else Modifier.fillMaxSize().background(bg)
-    Box(shell.padding(horizontal = if (samsung) 20.dp else 28.dp, vertical = if (minimal) 26.dp else 38.dp)) {
-        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(Modifier.height(if (minimal) 8.dp else 24.dp))
-            Text(
-                when { ios -> "Call via Mobile"; samsung -> "Incoming call"; themeName == "Vivo inspired" -> "INCOMING CALL"; else -> "INCOMING CALL" },
-                style = if (ios) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold,
-                letterSpacing = if (minimal) 0.sp else 2.sp
-            )
-            Spacer(Modifier.height(if (minimal) 8.dp else 14.dp))
-            Text(name, style = if (ios) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.headlineMedium, color = onBg, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(6.dp))
-            Text(if (phone.isBlank()) "Mobile" else if (ios) phone else "Mobile $phone", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-            Spacer(Modifier.weight(if (samsung) 0.8f else 1f))
-            if (samsung) {
-                Card(colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(28.dp)) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        CallerAvatar(photoUri, name, avatarSize)
-                        Text("Mobile $phone", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Button(onClick = onDecline, modifier = Modifier.weight(1f), shape = RoundedCornerShape(28.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE85C58), contentColor = Color.White)) { Icon(Icons.Outlined.CallEnd, null); Spacer(Modifier.width(5.dp)); Text("Decline") }
-                            Button(onClick = onAnswer, modifier = Modifier.weight(1f), shape = RoundedCornerShape(28.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF57BC7A), contentColor = Color.White)) { Icon(Icons.Outlined.Call, null); Spacer(Modifier.width(5.dp)); Text("Answer") }
-                        }
+    val isTruecaller = themeName == "Truecaller style"
+    val isVivo = themeName == "Vivo Call UI" || themeName == "Vivo inspired"
+    val isSamsung = themeName == "Samsung One UI"
+    val isIos = themeName == "iOS inspired"
+    val isMinimalDark = themeName == "Minimal dark"
+    val isMinimalLight = themeName == "Minimal light"
+    val isMinimal = isMinimalDark || isMinimalLight
+    val foreground = if (isMinimalLight) Color(0xFF202124) else Color.White
+    val muted = if (isMinimalLight) Color(0xFF5F6368) else foreground.copy(alpha = 0.76f)
+    val background = when {
+        isTruecaller -> Brush.verticalGradient(listOf(Color(0xFF075FEA), Color(0xFF1168F5), Color(0xFF347FF4), Color(0xFF1558D8)))
+        isVivo -> Brush.verticalGradient(listOf(Color(0xFF071821), Color(0xFF0B3D49), Color(0xFF16213B), Color(0xFF111729)))
+        isSamsung -> Brush.verticalGradient(listOf(Color(0xFF080B11), Color(0xFF141A24), Color(0xFF0E121A)))
+        isIos -> Brush.verticalGradient(listOf(Color(0xFF171719), Color(0xFF101012), Color(0xFF080809)))
+        isMinimalLight -> Brush.verticalGradient(listOf(Color(0xFFF8F9FA), Color(0xFFECEFF3)))
+        isMinimalDark -> Brush.verticalGradient(listOf(Color(0xFF080808), Color(0xFF171717)))
+        else -> Brush.verticalGradient(listOf(Color(0xFF101A24), Color(0xFF1A2A39), Color(0xFF101820)))
+    }
+
+    Box(Modifier.fillMaxSize().background(background)) {
+        when {
+            isTruecaller -> {
+                Column(Modifier.fillMaxSize().padding(horizontal = 26.dp, vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("CALLSTUDIO  •  CALLER ID", color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+                    Spacer(Modifier.height(7.dp))
+                    Text("Incoming call · ${phone.ifBlank { "Mobile" }}", color = Color.White.copy(alpha = 0.83f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+                    Spacer(Modifier.weight(0.65f))
+                    Box(
+                        Modifier.size(166.dp).background(Color.White.copy(alpha = 0.15f), CircleShape).padding(12.dp)
+                            .background(Color.White.copy(alpha = 0.10f), CircleShape).padding(6.dp),
+                        contentAlignment = Alignment.Center
+                    ) { CallerAvatar(photoUri, name, 136.dp) }
+                    Spacer(Modifier.height(24.dp))
+                    Text(name, color = Color.White, fontSize = 31.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(8.dp))
+                    Text(phone.ifBlank { "Mobile" }, color = Color.White.copy(alpha = 0.86f), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(18.dp))
+                    Box(Modifier.background(Color.White.copy(alpha = 0.17f), RoundedCornerShape(50.dp)).padding(horizontal = 18.dp, vertical = 9.dp)) {
+                        Text("Saved caller profile", color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                     }
-                }
-            } else {
-                CallerAvatar(photoUri, name, avatarSize)
-                Spacer(Modifier.height(if (minimal) 10.dp else 16.dp))
-                if (!ios) Text(name, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold)
-                Text("calling…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.weight(1f))
-                if (minimal || themeName == "Vivo inspired") {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(onClick = onDecline, modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(if (minimal) 12.dp else 28.dp)) { Icon(Icons.Outlined.CallEnd, null); Spacer(Modifier.width(6.dp)); Text("Decline") }
-                        Button(onClick = onAnswer, modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(if (minimal) 12.dp else 28.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF57BC7A), contentColor = Color.White)) { Icon(Icons.Outlined.Call, null); Spacer(Modifier.width(6.dp)); Text("Answer") }
+                    Spacer(Modifier.weight(1f))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IncomingCallControl("Decline", false, "truecaller", onDecline, Modifier.weight(1f))
+                        IncomingCallControl("Answer", true, "truecaller", onAnswer, Modifier.weight(1f))
                     }
-                } else {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Button(onClick = onDecline, modifier = Modifier.size(if (ios) 82.dp else 76.dp), shape = CircleShape, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE85C58), contentColor = Color.White), contentPadding = PaddingValues(0.dp)) { Icon(Icons.Outlined.CallEnd, contentDescription = "Decline call", modifier = Modifier.size(29.dp)) }
-                            Spacer(Modifier.height(10.dp)); Text("Decline", color = Color(0xFFE85C58), fontWeight = FontWeight.SemiBold)
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Button(onClick = onAnswer, modifier = Modifier.size(if (ios) 82.dp else 76.dp), shape = CircleShape, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF57BC7A), contentColor = Color.White), contentPadding = PaddingValues(0.dp)) { Icon(Icons.Outlined.Call, contentDescription = "Answer call", modifier = Modifier.size(29.dp)) }
-                            Spacer(Modifier.height(10.dp)); Text("Answer", color = Color(0xFF57BC7A), fontWeight = FontWeight.SemiBold)
-                        }
-                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text("Simulated call · no real phone call is placed", color = Color.White.copy(alpha = 0.68f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
                 }
             }
-            Spacer(Modifier.height(if (minimal) 8.dp else 24.dp))
+
+            isSamsung -> {
+                Column(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 34.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("INCOMING CALL", color = Color(0xFFA9BDEB), style = MaterialTheme.typography.labelLarge, letterSpacing = 2.2.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.weight(0.72f))
+                    CallerAvatar(photoUri, name, 142.dp)
+                    Spacer(Modifier.height(28.dp))
+                    Text(name, color = Color.White, fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(9.dp))
+                    Text(phone.ifBlank { "Mobile" }, color = Color(0xFFCBD1DD), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(7.dp))
+                    Text("Mobile · Incoming", color = Color(0xFF8994A8), style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.weight(1.15f))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                        IncomingCallControl("Decline", false, "samsung", onDecline, Modifier.weight(1f))
+                        IncomingCallControl("Answer", true, "samsung", onAnswer, Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(28.dp))
+                }
+            }
+
+            isVivo -> {
+                Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("INCOMING CALL", color = Color(0xFF6BE7DE), style = MaterialTheme.typography.labelLarge, letterSpacing = 2.7.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.weight(0.58f))
+                    Box(
+                        Modifier.size(178.dp).background(Color(0xFF00D4C4).copy(alpha = 0.12f), CircleShape).padding(10.dp)
+                            .background(Color(0xFF00D4C4).copy(alpha = 0.13f), CircleShape).padding(10.dp),
+                        contentAlignment = Alignment.Center
+                    ) { CallerAvatar(photoUri, name, 138.dp) }
+                    Spacer(Modifier.height(26.dp))
+                    Text(name, color = Color.White, fontSize = 29.sp, lineHeight = 35.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(8.dp))
+                    Text(phone.ifBlank { "Mobile" }, color = Color(0xFFB5D4D8), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                    Text("CallStudio incoming call", color = Color(0xFF719BA3), style = MaterialTheme.typography.labelMedium)
+                    Spacer(Modifier.weight(0.9f))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        IncomingCallControl("Decline", false, "vivo", onDecline, Modifier.weight(1f))
+                        IncomingCallControl("Answer", true, "vivo", onAnswer, Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(18.dp))
+                }
+            }
+
+            isIos -> {
+                Column(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 34.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Call via Mobile", color = Color.White.copy(alpha = 0.83f), style = MaterialTheme.typography.bodyLarge)
+                    Spacer(Modifier.height(6.dp))
+                    Text(name, color = Color.White, fontSize = 31.sp, lineHeight = 37.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                    Text(phone.ifBlank { "Mobile" }, color = Color.White.copy(alpha = 0.74f), style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.weight(0.8f))
+                    Box(Modifier.size(178.dp).background(Color.White.copy(alpha = 0.05f), CircleShape).padding(9.dp), contentAlignment = Alignment.Center) {
+                        CallerAvatar(photoUri, name, 160.dp)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        IncomingCallControl("Decline", false, "ios", onDecline, Modifier.weight(1f))
+                        IncomingCallControl("Answer", true, "ios", onAnswer, Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(20.dp))
+                }
+            }
+
+            isMinimal -> {
+                Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 28.dp)) {
+                    Text("INCOMING CALL", color = muted, style = MaterialTheme.typography.labelLarge, letterSpacing = 1.8.sp)
+                    Spacer(Modifier.height(44.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                        CallerAvatar(photoUri, name, 84.dp)
+                        Column(Modifier.weight(1f)) {
+                            Text(name, color = foreground, fontSize = 25.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(5.dp))
+                            Text(phone.ifBlank { "Mobile" }, color = muted, style = MaterialTheme.typography.bodyLarge)
+                            Spacer(Modifier.height(4.dp))
+                            Text("CallStudio", color = muted, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        IncomingCallControl("Decline", false, themeName, onDecline, Modifier.weight(1f))
+                        IncomingCallControl("Answer", true, themeName, onAnswer, Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
+            }
+
+            else -> {
+                // Pixel / Android: clear identity first, with wide, tactile call actions.
+                Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("INCOMING CALL", color = Color(0xFFB8D3C4), style = MaterialTheme.typography.labelLarge, letterSpacing = 2.sp)
+                    Spacer(Modifier.weight(0.62f))
+                    CallerAvatar(photoUri, name, 142.dp)
+                    Spacer(Modifier.height(24.dp))
+                    Text(name, color = Color.White, fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(8.dp))
+                    Text(phone.ifBlank { "Mobile" }, color = Color.White.copy(alpha = 0.76f), style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Calling…", color = Color(0xFFB8D3C4), style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.weight(1f))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        IncomingCallControl("Decline", false, "pixel", onDecline, Modifier.weight(1f))
+                        IncomingCallControl("Answer", true, "pixel", onAnswer, Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(18.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun IncomingCallControl(
+    label: String,
+    answer: Boolean,
+    style: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isTruecaller = style == "truecaller"
+    val isVivo = style == "vivo"
+    val isSamsung = style == "samsung"
+    val isIos = style == "ios"
+    val isMinimal = style.startsWith("Minimal")
+    val wide = isVivo || style == "pixel" || isMinimal
+    val actionColor = when {
+        isTruecaller -> Color.White
+        isVivo && answer -> Color(0xFF00BFAF)
+        isVivo -> Color(0xFFEF5963)
+        answer && isSamsung -> Color(0xFF35B86B)
+        !answer && isSamsung -> Color(0xFFEA5C68)
+        answer && isIos -> Color(0xFF30C65A)
+        !answer && isIos -> Color(0xFFFF453A)
+        answer -> Color(0xFF1FA66A)
+        else -> Color(0xFFEA4D57)
+    }
+    val iconColor = if (isTruecaller) {
+        if (answer) Color(0xFF138B61) else Color(0xFFDF4050)
+    } else Color.White
+    val labelColor = if (isMinimal) {
+        if (style == "Minimal light") Color(0xFF202124) else Color(0xFFE7E7E7)
+    } else Color.White.copy(alpha = 0.88f)
+
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        if (isMinimal) {
+            OutlinedButton(
+                onClick = onClick,
+                modifier = Modifier.fillMaxWidth().height(54.dp),
+                shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, if (answer) Color(0xFF28A66A) else Color(0xFFE24B55)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = if (answer) Color(0xFF28A66A) else Color(0xFFE24B55)),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                Icon(if (answer) Icons.Outlined.Call else Icons.Outlined.CallEnd, contentDescription = label, modifier = Modifier.size(21.dp))
+                Spacer(Modifier.width(7.dp))
+                Text(label, fontWeight = FontWeight.SemiBold)
+            }
+        } else {
+            Button(
+                onClick = onClick,
+                modifier = if (wide) Modifier.fillMaxWidth().height(58.dp) else Modifier.size(if (isSamsung) 76.dp else 82.dp),
+                shape = if (wide) RoundedCornerShape(if (isVivo) 24.dp else 18.dp) else CircleShape,
+                colors = ButtonDefaults.buttonColors(containerColor = actionColor, contentColor = iconColor),
+                contentPadding = if (wide) PaddingValues(horizontal = 13.dp, vertical = 8.dp) else PaddingValues(0.dp)
+            ) {
+                Icon(if (answer) Icons.Outlined.Call else Icons.Outlined.CallEnd, contentDescription = label, modifier = Modifier.size(24.dp))
+                if (wide) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(label, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            if (!wide) Text(label, color = labelColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
         }
     }
 }

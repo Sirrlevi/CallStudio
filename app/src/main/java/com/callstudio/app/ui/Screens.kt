@@ -263,7 +263,7 @@ fun SettingsScreen(
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.Palette, null, tint = MaterialTheme.colorScheme.primary); Spacer(Modifier.width(8.dp)); Text("Call screen theme", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
-                        val themes = listOf("Pixel / Android", "Samsung One UI", "iOS inspired", "Vivo inspired", "Minimal dark", "Minimal light")
+                        val themes = listOf("Pixel / Android", "Truecaller style", "Vivo Call UI", "Samsung One UI", "iOS inspired", "Minimal dark", "Minimal light")
                         themes.forEach { theme ->
                             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onTheme(theme) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                                 RadioButton(selected = settings.theme == theme, onClick = { onTheme(theme) })
@@ -363,15 +363,49 @@ fun CallerEditorDialog(existing: CallerProfile?, onDismiss: () -> Unit, onSave: 
         val uri = result.data?.data
         if (result.resultCode == android.app.Activity.RESULT_OK && uri != null) {
             try {
-                context.contentResolver.query(uri, arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER), null, null, null)?.use { cursor ->
+                var selectedContactId: String? = null
+                val phoneProjection = arrayOf(
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                    ContactsContract.CommonDataKinds.Phone.NUMBER,
+                    ContactsContract.CommonDataKinds.Phone.CONTACT_ID
+                )
+                context.contentResolver.query(uri, phoneProjection, null, null, null)?.use { cursor ->
                     if (cursor.moveToFirst()) {
                         val nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
                         val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                        val idIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
                         if (nameIndex >= 0) name = cursor.getString(nameIndex).orEmpty()
                         if (numberIndex >= 0) phone = cursor.getString(numberIndex).orEmpty()
+                        if (idIndex >= 0) selectedContactId = cursor.getString(idIndex)
                     }
                 }
-            } catch (_: SecurityException) { }
+
+                var selectedPhoto: String? = null
+                if (!selectedContactId.isNullOrBlank()) {
+                    val photoProjection = arrayOf(
+                        ContactsContract.Contacts.PHOTO_URI,
+                        ContactsContract.Contacts.PHOTO_THUMBNAIL_URI
+                    )
+                    context.contentResolver.query(
+                        ContactsContract.Contacts.CONTENT_URI,
+                        photoProjection,
+                        "${ContactsContract.Contacts._ID} = ?",
+                        arrayOf(selectedContactId),
+                        null
+                    )?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val fullIndex = cursor.getColumnIndex(ContactsContract.Contacts.PHOTO_URI)
+                            val thumbIndex = cursor.getColumnIndex(ContactsContract.Contacts.PHOTO_THUMBNAIL_URI)
+                            val fullPhoto = if (fullIndex >= 0) cursor.getString(fullIndex) else null
+                            val thumbnail = if (thumbIndex >= 0) cursor.getString(thumbIndex) else null
+                            selectedPhoto = fullPhoto?.takeIf { it.isNotBlank() }
+                                ?: thumbnail?.takeIf { it.isNotBlank() }
+                        }
+                    }
+                }
+                // Replace an old photo with the selected contact's photo, if available.
+                photoUri = selectedPhoto
+            } catch (_: Exception) { }
         }
     }
     val contactPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -393,8 +427,25 @@ fun CallerEditorDialog(existing: CallerProfile?, onDismiss: () -> Unit, onSave: 
                         } else contactPermission.launch(Manifest.permission.READ_CONTACTS)
                     }, modifier = Modifier.weight(1f)) { Text("Select contact") }
                 }
-                if (photoUri != null) Text("Profile photo selected", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
-                Text("The selected contact is copied into this profile; the app does not modify your address book.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    CallerAvatar(photoUri, name.ifBlank { "Caller" }, 52.dp)
+                    Column {
+                        Text(
+                            if (photoUri != null) "Contact photo linked" else "No contact photo",
+                            color = if (photoUri != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                        Text(
+                            "You can still choose a different image. Your address book is not modified.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
