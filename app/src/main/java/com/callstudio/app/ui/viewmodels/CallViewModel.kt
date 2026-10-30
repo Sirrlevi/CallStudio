@@ -31,6 +31,7 @@ class CallViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleMute() = sessions.toggleMute(id())
     fun toggleSpeaker() = sessions.toggleSpeaker(id())
     fun voiceToggle() = sessions.voiceToggle(id())
+    fun toggleHold() = sessions.toggleHold(id())
     fun startRecording() = sessions.startRecording(id())
     fun stopRecording() = sessions.stopRecording()
     fun micDenied() = sessions.micDenied()

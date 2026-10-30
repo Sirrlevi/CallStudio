@@ -9,8 +9,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.callstudio.app.audio.AudioFiles
 import com.callstudio.app.audio.RingtonePlayer
-import com.callstudio.app.audio.VoicePlayer
-import com.callstudio.app.audio.VoiceState
 import com.callstudio.app.container
 import com.callstudio.app.preferences.AppSettings
 import com.callstudio.app.preferences.RingtoneSource
@@ -32,8 +30,6 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     val liveCall = c.sessions.session
 
     private val ringPreview = RingtonePlayer(app)
-    private val voicePreview = VoicePlayer(app, inCall = false)
-    val voicePreviewState: StateFlow<VoiceState> = voicePreview.state
 
     var ringPreviewing by mutableStateOf(false)
         private set
@@ -105,45 +101,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
         ringPreviewing = false
     }
 
-    // ---- caller voice clip -------------------------------------------------------------------------------
-
-    fun onVoicePicked(uri: Uri) {
-        AudioFiles.persist(ctx, uri)
-        viewModelScope.launch {
-            voicePreview.release()
-            val old = c.settings.current().voiceUri
-            c.settings.setVoice(uri.toString(), AudioFiles.displayName(ctx, uri) ?: "Audio file")
-            if (old != null && old != uri.toString()) AudioFiles.release(ctx, old)
-        }
-    }
-
-    fun clearVoice() {
-        viewModelScope.launch {
-            voicePreview.release()
-            val old = c.settings.current().voiceUri
-            c.settings.setVoice(null, null)
-            AudioFiles.release(ctx, old)
-        }
-    }
-
-    fun toggleVoicePreview() {
-        viewModelScope.launch {
-            when (voicePreview.state.value) {
-                VoiceState.Playing -> voicePreview.pause()
-                VoiceState.Paused -> voicePreview.play()
-                else -> {
-                    val st = c.settings.current()
-                    val ok = withContext(Dispatchers.IO) { voicePreview.load(st.voiceUri, repeat = false) }
-                    if (ok) voicePreview.play()
-                }
-            }
-        }
-    }
-
-    fun stopVoicePreview() = voicePreview.release()
-
     override fun onCleared() {
         ringPreview.stop()
-        voicePreview.release()
     }
 }

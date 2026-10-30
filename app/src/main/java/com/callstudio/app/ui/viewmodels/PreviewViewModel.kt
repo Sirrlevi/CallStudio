@@ -8,11 +8,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.callstudio.app.audio.AudioRouter
 import com.callstudio.app.audio.RingtonePlayer
-import com.callstudio.app.audio.VoicePlayer
-import com.callstudio.app.audio.VoiceState
 import com.callstudio.app.container
+import com.callstudio.app.data.displayNumber
+import com.callstudio.app.domain.Countries
 import com.callstudio.app.preferences.AppSettings
-import com.callstudio.app.preferences.VoicePlayMode
 import com.callstudio.app.ui.call.CallerUi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
@@ -22,17 +21,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Previews the real thing with the saved caller, theme and audio settings: the actual ringtone while ringing,
- * and the actual caller clip and speaker routing once answered. Nothing is recorded or scheduled.
+ * Previews the real thing with the saved caller, theme and audio settings: the actual ringtone while ringing and
+ * real speaker routing once answered. Nothing is recorded or scheduled. (Voice clips belong to individual calls,
+ * so they play in real calls, not here.)
  */
 class PreviewViewModel(app: Application) : AndroidViewModel(app) {
     private val c = app.container
     private val ringtone = RingtonePlayer(app)
-    private val voice = VoicePlayer(app, inCall = true)
     private val router = AudioRouter(app)
 
     val settings: StateFlow<AppSettings?> = c.settings.settings.stateIn(viewModelScope, SharingStarted.Eagerly, null)
-    val voiceState: StateFlow<VoiceState> = voice.state
     val liveCall = c.sessions.session
 
     var caller by mutableStateOf<CallerUi?>(null)
@@ -49,7 +47,8 @@ class PreviewViewModel(app: Application) : AndroidViewModel(app) {
             val chosen = (if (id > 0) c.callers.get(id) else null)
                 ?: c.callers.get(c.settings.current().lastCallerId)
                 ?: c.callers.firstOrNull()
-            caller = chosen?.let { CallerUi(it.name, it.phone, it.photoFile) } ?: CallerUi("Alex Morgan", "+1 555 0100", null)
+            caller = chosen?.let { CallerUi(it.name, it.displayNumber(), it.photoFile, Countries.nameOf(it.countryIso)) }
+                ?: CallerUi("Alex Morgan", "+1 555 010 0100", null, "United States")
         }
     }
 
@@ -77,8 +76,6 @@ class PreviewViewModel(app: Application) : AndroidViewModel(app) {
             val st = c.settings.current()
             if (st.startOnSpeaker) router.setSpeaker(true)
             speakerOn = router.isSpeakerOn()
-            val ok = withContext(Dispatchers.IO) { voice.load(st.voiceUri, st.voiceMode == VoicePlayMode.AUTO_REPEAT) }
-            if (ok && st.voiceMode != VoicePlayMode.MANUAL) voice.play()
         }
     }
 
@@ -87,22 +84,8 @@ class PreviewViewModel(app: Application) : AndroidViewModel(app) {
         speakerOn = router.isSpeakerOn()
     }
 
-    fun voiceToggle() {
-        when (voice.state.value) {
-            VoiceState.Playing -> voice.pause()
-            VoiceState.Paused, VoiceState.Ready -> voice.play()
-            VoiceState.Finished -> voice.replay()
-            is VoiceState.Error -> viewModelScope.launch {
-                val st = c.settings.current()
-                if (withContext(Dispatchers.IO) { voice.load(st.voiceUri, st.voiceMode == VoicePlayMode.AUTO_REPEAT) }) voice.play()
-            }
-            VoiceState.NoClip -> Unit
-        }
-    }
-
     fun finish() {
         stopRinging()
-        voice.release()
         if (inCall) router.exitCall()
         inCall = false
         speakerOn = false

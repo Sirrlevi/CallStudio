@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStream
 import java.util.UUID
 
 /**
@@ -25,18 +26,20 @@ class PhotoStore(private val context: Context) {
         if (name != null) runCatching { File(dir, name).delete() }
     }
 
-    suspend fun import(uri: Uri): String? = withContext(Dispatchers.IO) {
+    suspend fun import(uri: Uri): String? = importFrom { context.contentResolver.openInputStream(uri) }
+
+    /** [open] is called once per decode pass, so it must return a fresh stream every time. */
+    suspend fun importFrom(open: () -> InputStream?): String? = withContext(Dispatchers.IO) {
         try {
-            val resolver = context.contentResolver
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            open()?.use { BitmapFactory.decodeStream(it, null, bounds) }
             if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@withContext null
             var sample = 1
             while (bounds.outWidth / sample > MAX_SIDE * 2 || bounds.outHeight / sample > MAX_SIDE * 2) sample *= 2
             val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-            var bmp = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+            var bmp = open()?.use { BitmapFactory.decodeStream(it, null, opts) }
                 ?: return@withContext null
-            val rotation = resolver.openInputStream(uri)?.use { stream ->
+            val rotation = open()?.use { stream ->
                 when (ExifInterface(stream).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
                     ExifInterface.ORIENTATION_ROTATE_90 -> 90f
                     ExifInterface.ORIENTATION_ROTATE_180 -> 180f

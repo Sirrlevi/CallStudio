@@ -16,11 +16,11 @@ import com.callstudio.app.domain.TimeFormat
 import com.callstudio.app.recording.RecorderState
 import com.callstudio.app.session.SessionState
 
-data class CallerUi(val name: String, val phone: String, val photoFile: String?) {
+data class CallerUi(val name: String, val phone: String, val photoFile: String?, val country: String? = null) {
     val title: String get() = name.ifBlank { phone }.ifBlank { "Unknown" }
 }
 
-class IncomingActions(val onAnswer: () -> Unit, val onDecline: () -> Unit)
+class IncomingActions(val onAnswer: () -> Unit, val onDecline: () -> Unit, val onMessage: () -> Unit = {})
 
 data class ControlSpec(
     val id: String,
@@ -37,6 +37,9 @@ data class InCallModel(
     val recordingLabel: String?,
     val controls: List<ControlSpec>,
     val onEnd: () -> Unit,
+    /** Keypad, hold and message; only themes whose layout has slots for them show these. */
+    val extraControls: List<ControlSpec> = emptyList(),
+    val held: Boolean = false,
 )
 
 class CallActions(
@@ -48,6 +51,8 @@ class CallActions(
     val onRecordPause: () -> Unit,
     val onVoice: () -> Unit,
     val onEnd: () -> Unit,
+    val onHold: () -> Unit = {},
+    val onMessage: () -> Unit = {},
 )
 
 fun recordingLabel(state: RecorderState): String? = when (state) {

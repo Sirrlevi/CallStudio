@@ -48,6 +48,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.callstudio.app.CallActivity
 import com.callstudio.app.data.CallerEntity
+import com.callstudio.app.data.displayNumber
 import com.callstudio.app.domain.ScheduleSpec
 import com.callstudio.app.scheduling.ScheduleCoordinator
 import com.callstudio.app.ui.Routes
@@ -138,7 +139,7 @@ fun DashboardScreen(nav: NavController, vm: ScheduleViewModel = viewModel()) {
                             Spacer(Modifier.width(16.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(selected.name, style = MaterialTheme.typography.titleMedium)
-                                if (selected.phone.isNotBlank()) Text(selected.phone, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (selected.phone.isNotBlank()) Text(selected.displayNumber(), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             TextButton(onClick = { picking = true }) { Text("Change") }
                         }

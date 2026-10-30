@@ -2,8 +2,12 @@
 
 package com.callstudio.app.ui.screens
 
+import android.net.Uri
 import android.text.format.DateFormat
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,6 +73,7 @@ import androidx.navigation.NavController
 import com.callstudio.app.CallActivity
 import com.callstudio.app.data.CallEventEntity
 import com.callstudio.app.data.CallerEntity
+import com.callstudio.app.data.displayNumber
 import com.callstudio.app.domain.ScheduleCalculator
 import com.callstudio.app.domain.ScheduleResult
 import com.callstudio.app.domain.ScheduleSpec
@@ -121,6 +126,10 @@ fun ScheduleScreen(
         mutableStateOf(LocalTime.now().plusMinutes(10).withSecond(0).withNano(0).toString())
     }
     var chosenId by rememberSaveable { mutableStateOf(callerId) }
+    var voiceUri by rememberSaveable { mutableStateOf<String?>(null) }
+    var voiceLabel by rememberSaveable { mutableStateOf<String?>(null) }
+    var originalVoiceUri by rememberSaveable { mutableStateOf<String?>(null) }
+    var voiceError by remember { mutableStateOf<String?>(null) }
     var loadedEvent by rememberSaveable { mutableStateOf(!editing) }
     var showDate by remember { mutableStateOf(false) }
     var showTime by remember { mutableStateOf(false) }
@@ -137,10 +146,33 @@ fun ScheduleScreen(
                 val dt = Instant.ofEpochMilli(e.triggerAtMillis).atZone(ZoneId.systemDefault()).toLocalDateTime()
                 date = dt.toLocalDate().toString()
                 time = dt.toLocalTime().withSecond(0).withNano(0).toString()
+                voiceUri = e.voiceUri
+                voiceLabel = e.voiceLabel
+                originalVoiceUri = e.voiceUri
             }
             loadedEvent = true
         }
     }
+
+    val voicePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) scope.launch {
+            val label = vm.acceptVoiceFile(uri)
+            if (label == null) {
+                voiceError = "This file can't be played. Choose an MP3, M4A, WAV, OGG or FLAC file."
+            } else {
+                voiceError = null
+                if (voiceUri != null && voiceUri != originalVoiceUri) vm.discardVoiceFile(voiceUri)
+                voiceUri = uri.toString()
+                voiceLabel = label
+            }
+        }
+    }
+
+    fun leave() {
+        if (voiceUri != originalVoiceUri) vm.discardVoiceFile(voiceUri)
+        nav.popBackStack()
+    }
+    BackHandler { leave() }
 
     val list = callers
     val caller: CallerEntity? = list?.firstOrNull { it.id == chosenId }
@@ -168,17 +200,18 @@ fun ScheduleScreen(
         val s = spec()
         if (c == null) { error = "Choose a caller first."; return }
         if (s == null) { error = "Enter a valid number."; return }
+        val clip = voiceUri?.let { ScheduleCoordinator.VoiceClip(it, voiceLabel) }
         scope.launch {
             saving = true
             error = null
             if (s == ScheduleSpec.Immediate) {
-                val id = vm.startNow(c.id)
+                val id = vm.startNow(c.id, clip)
                 if (id != null) {
                     ctx.startActivity(CallActivity.intent(ctx, id))
                     nav.popBackStack()
                 } else error = "Couldn't start the call."
             } else {
-                when (val o = vm.schedule(c, s, if (editing) eventId else null)) {
+                when (val o = vm.schedule(c, s, if (editing) eventId else null, clip)) {
                     is ScheduleCoordinator.Outcome.Rejected -> error = o.problem.message()
                     is ScheduleCoordinator.Outcome.Scheduled -> {
                         val note = if (o.exact) "" else " Exact timing is off, so it may arrive a few minutes late."
@@ -191,7 +224,7 @@ fun ScheduleScreen(
         }
     }
 
-    Scaffold(topBar = { AppTopBar(if (editing) "Reschedule call" else "Schedule a call", onBack = { nav.popBackStack() }) }) { pad ->
+    Scaffold(topBar = { AppTopBar(if (editing) "Reschedule call" else "Schedule a call", onBack = { leave() }) }) { pad ->
         if (list == null) {
             Box(Modifier.padding(pad)) { LoadingBox() }
         } else if (list.isEmpty()) {
@@ -212,7 +245,7 @@ fun ScheduleScreen(
                             Spacer(Modifier.width(16.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(caller.name, style = MaterialTheme.typography.titleMedium)
-                                if (caller.phone.isNotBlank()) Text(caller.phone, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (caller.phone.isNotBlank()) Text(caller.displayNumber(), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             TextButton(onClick = { showPicker = true }) { Text("Change") }
                         }
@@ -285,6 +318,30 @@ fun ScheduleScreen(
                     }
                 }
 
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Caller voice (optional)", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            voiceLabel ?: "No clip. After you answer, nothing plays unless you add one for this call.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { voicePicker.launch(arrayOf("audio/*")) }) {
+                                Text(if (voiceUri == null) "Add audio clip" else "Change clip")
+                            }
+                            if (voiceUri != null) {
+                                TextButton(onClick = {
+                                    if (voiceUri != originalVoiceUri) vm.discardVoiceFile(voiceUri)
+                                    voiceUri = null
+                                    voiceLabel = null
+                                    voiceError = null
+                                }) { Text("Remove") }
+                            }
+                        }
+                        voiceError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    }
+                }
                 if (summary != null) Text(summary, style = MaterialTheme.typography.bodyMedium)
                 if (mode != 0 && !exact) {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
@@ -395,6 +452,7 @@ fun ScheduledScreen(nav: NavController, vm: ScheduleViewModel = viewModel()) {
                             supportingContent = {
                                 Column {
                                     Text("${formatWhen(e.triggerAtMillis)} · ${TimeFormat.countdown(e.triggerAtMillis - now)}")
+                                    if (e.voiceLabel != null) Text("Voice: ${e.voiceLabel}", style = MaterialTheme.typography.labelSmall)
                                     Text(
                                         if (e.exactAlarm) "Exact timing" else "Approximate timing",
                                         style = MaterialTheme.typography.labelSmall,

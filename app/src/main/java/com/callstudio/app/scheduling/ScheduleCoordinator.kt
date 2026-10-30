@@ -1,8 +1,11 @@
 package com.callstudio.app.scheduling
 
+import com.callstudio.app.audio.VoiceLeases
 import com.callstudio.app.data.CallDao
 import com.callstudio.app.data.CallEventEntity
 import com.callstudio.app.data.CallerEntity
+import com.callstudio.app.data.displayNumber
+import com.callstudio.app.domain.Countries
 import com.callstudio.app.domain.CallEvent
 import com.callstudio.app.domain.CallStateMachine
 import com.callstudio.app.domain.CallStatus
@@ -21,7 +24,11 @@ class ScheduleCoordinator(
     private val engine: SchedulingEngine,
     private val clock: () -> Long = { System.currentTimeMillis() },
     private val zone: () -> ZoneId = { ZoneId.systemDefault() },
+    private val leases: VoiceLeases? = null,
 ) {
+    /** Optional caller voice for one specific call. */
+    data class VoiceClip(val uri: String, val label: String?)
+
     /** Called when a call is due immediately (recovery after reboot, or "start now"). */
     var fireHandler: suspend (Long) -> Unit = {}
 
@@ -35,7 +42,12 @@ class ScheduleCoordinator(
     fun canScheduleExact(): Boolean = engine.canScheduleExact()
 
     /** Creates a scheduled call, or when [editingEventId] is given and still scheduled, reschedules that one. */
-    suspend fun schedule(caller: CallerEntity, spec: ScheduleSpec, editingEventId: Long? = null): Outcome {
+    suspend fun schedule(
+        caller: CallerEntity,
+        spec: ScheduleSpec,
+        editingEventId: Long? = null,
+        voice: VoiceClip? = null,
+    ): Outcome {
         val now = clock()
         val valid = when (val r = ScheduleCalculator.resolve(spec, now, zone())) {
             is ScheduleResult.Invalid -> return Outcome.Rejected(r.reason.toProblem())
@@ -53,8 +65,11 @@ class ScheduleCoordinator(
             id = existing?.id ?: 0,
             callerId = caller.id,
             callerName = caller.name,
-            callerPhone = caller.phone,
+            callerPhone = caller.displayNumber(),
+            callerCountry = Countries.nameOf(caller.countryIso),
             callerPhotoFile = caller.photoFile,
+            voiceUri = voice?.uri,
+            voiceLabel = voice?.label,
             triggerAtMillis = valid.triggerAtMillis,
             wallClock = valid.wallClock?.toString(),
             status = CallStatus.SCHEDULED.name,
@@ -62,6 +77,7 @@ class ScheduleCoordinator(
         )
         val id = if (existing != null) {
             calls.update(base)
+            if (existing.voiceUri != voice?.uri) leases?.releaseIfUnused(existing.voiceUri)
             existing.id
         } else {
             calls.insert(base)
@@ -80,6 +96,7 @@ class ScheduleCoordinator(
         if (CallStateMachine.next(CallStatus.SCHEDULED, CallEvent.CANCEL) != CallStatus.CANCELLED) return false
         engine.cancel(eventId)
         calls.update(e.copy(status = CallStatus.CANCELLED.name, endedAtMillis = clock(), endReason = "Cancelled"))
+        leases?.releaseIfUnused(e.voiceUri)
         return true
     }
 
@@ -123,6 +140,7 @@ class ScheduleCoordinator(
                             endReason = "Missed while the device was off or the app was stopped",
                         )
                     )
+                    leases?.releaseIfUnused(event.voiceUri)
                 }
             }
         }

@@ -15,21 +15,21 @@ class CallerRepository(
     suspend fun firstOrNull(): CallerEntity? = dao.mostRecentlyUsed()
 
     /** Creates or updates a caller. Blank names fall back to the phone number. */
-    suspend fun save(id: Long, name: String, phone: String, photoFile: String?): Long {
-        val cleanPhone = phone.trim()
+    suspend fun save(id: Long, name: String, phone: String, countryIso: String, photoFile: String?): Long {
+        val cleanPhone = phone.filter { it.isDigit() }.ifBlank { phone.trim() }
         val cleanName = name.trim().ifBlank { cleanPhone }
         val now = System.currentTimeMillis()
         return if (id > 0) {
             val old = dao.get(id)
             if (old != null) {
-                dao.update(old.copy(name = cleanName, phone = cleanPhone, photoFile = photoFile))
+                dao.update(old.copy(name = cleanName, phone = cleanPhone, countryIso = countryIso, photoFile = photoFile))
                 if (old.photoFile != null && old.photoFile != photoFile) photos.delete(old.photoFile)
                 id
             } else {
-                dao.insert(CallerEntity(name = cleanName, phone = cleanPhone, photoFile = photoFile, createdAt = now))
+                dao.insert(CallerEntity(name = cleanName, phone = cleanPhone, countryIso = countryIso, photoFile = photoFile, createdAt = now))
             }
         } else {
-            dao.insert(CallerEntity(name = cleanName, phone = cleanPhone, photoFile = photoFile, createdAt = now))
+            dao.insert(CallerEntity(name = cleanName, phone = cleanPhone, countryIso = countryIso, photoFile = photoFile, createdAt = now))
         }
     }
 

@@ -16,6 +16,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Dialpad
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -23,6 +28,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,7 +60,17 @@ fun CallHost(
             }
         }
     }
-    val caller = CallerUi(session.callerName, session.callerPhone, session.callerPhotoFile)
+    var showKeypad by rememberSaveable { mutableStateOf(false) }
+    val caller = CallerUi(session.callerName, session.callerPhone, session.callerPhotoFile, session.callerCountry)
+    val extras = listOf(
+        ControlSpec("keypad", "Keypad", Icons.Filled.Dialpad, onClick = { showKeypad = true }),
+        ControlSpec(
+            "hold", if (session.held) "Resume" else "Hold",
+            if (session.held) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+            active = session.held, onClick = actions.onHold,
+        ),
+        ControlSpec("message", "Message", Icons.Filled.Sms, onClick = actions.onMessage),
+    )
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AnimatedContent(
             targetState = session.status,
@@ -62,7 +79,7 @@ fun CallHost(
             modifier = Modifier.fillMaxSize(),
         ) { status ->
             when (status) {
-                CallStatus.RINGING -> IncomingCallScreen(theme, caller, IncomingActions(actions.onAnswer, actions.onDecline))
+                CallStatus.RINGING -> IncomingCallScreen(theme, caller, IncomingActions(actions.onAnswer, actions.onDecline, actions.onMessage))
                 CallStatus.ACTIVE -> InCallScreen(
                     theme,
                     InCallModel(
@@ -71,11 +88,14 @@ fun CallHost(
                         recordingLabel = recordingLabel(session.recording),
                         controls = buildControls(session, actions),
                         onEnd = actions.onEnd,
+                        extraControls = extras,
+                        held = session.held,
                     ),
                 )
                 else -> Box(Modifier.fillMaxSize().background(Color.Black))
             }
         }
+        if (showKeypad && session.status == CallStatus.ACTIVE) KeypadDialog { showKeypad = false }
         val message = session.message
         if (message != null) {
             Box(

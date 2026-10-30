@@ -24,8 +24,8 @@ class CallersViewModel(app: Application) : AndroidViewModel(app) {
 
     suspend fun load(id: Long): CallerEntity? = c.callers.get(id)
 
-    suspend fun save(id: Long, name: String, phone: String, photoFile: String?): Long =
-        c.callers.save(id, name, phone, photoFile)
+    suspend fun save(id: Long, name: String, phone: String, countryIso: String, photoFile: String?): Long =
+        c.callers.save(id, name, phone, countryIso, photoFile)
 
     fun delete(caller: CallerEntity) {
         viewModelScope.launch { c.callers.delete(caller) }
@@ -35,10 +35,12 @@ class CallersViewModel(app: Application) : AndroidViewModel(app) {
 
     fun discardPhoto(name: String?) = c.photos.delete(name)
 
-    /** Reads the picked contact row (no contacts permission needed) and copies its photo if one is readable. */
-    suspend fun readContact(uri: Uri): Pair<ContactInfo, String?>? {
+    /** The contact's name, number and (when Android allows it) photo, copied into app storage. */
+    data class ContactPick(val info: ContactInfo, val photoFile: String?)
+
+    suspend fun readContact(uri: Uri): ContactPick? {
         val info = withContext(Dispatchers.IO) { ContactsHelper.read(getApplication(), uri) } ?: return null
-        val photo = info.photoUri?.let { c.photos.import(it) }
-        return info to photo
+        val photo = c.photos.importFrom { ContactsHelper.openPhoto(getApplication(), info) }
+        return ContactPick(info, photo)
     }
 }

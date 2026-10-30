@@ -47,18 +47,15 @@ import com.callstudio.app.ui.viewmodels.SettingsViewModel
 @Composable
 fun AudioSettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
     val st by vm.settings.collectAsStateWithLifecycle()
-    val voiceState by vm.voicePreviewState.collectAsStateWithLifecycle()
 
     DisposableEffect(Unit) {
         onDispose {
             vm.stopRingPreview()
-            vm.stopVoicePreview()
         }
     }
 
     val systemPicker = rememberLauncherForActivityResult(PickRingtoneContract()) { uri: Uri? -> if (uri != null) vm.onSystemRingtonePicked(uri) }
     val ringFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? -> if (uri != null) vm.onCustomRingtonePicked(uri) }
-    val voicePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? -> if (uri != null) vm.onVoicePicked(uri) }
     val audioTypes = arrayOf("audio/*")
 
     Scaffold(topBar = { AppTopBar("Audio and ringtone", onBack = { nav.popBackStack() }) }) { pad ->
@@ -91,26 +88,14 @@ fun AudioSettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel())
                 Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp, 8.dp))
             }
 
-            SectionTitle("Caller voice clip")
-            ListItem(
-                headlineContent = { Text(st.voiceLabel ?: "No clip selected") },
-                supportingContent = { Text("Plays on this device after you answer. MP3, M4A, WAV, OGG and FLAC usually work.") },
+            SectionTitle("Caller voice clips")
+            Text(
+                "Each call has its own voice clip. You choose it, optionally, when you schedule the call. " +
+                    "These options say how the clip plays once you answer.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
-            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { voicePicker.launch(audioTypes) }) { Text(if (st.voiceUri == null) "Choose audio file" else "Change file") }
-                if (st.voiceUri != null) {
-                    Spacer(Modifier.width(8.dp))
-                    OutlinedButton(onClick = { vm.toggleVoicePreview() }) {
-                        Icon(if (voiceState == VoiceState.Playing) Icons.Filled.Stop else Icons.Filled.PlayArrow, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (voiceState == VoiceState.Playing) "Pause" else "Test")
-                    }
-                    TextButton(onClick = { vm.clearVoice() }) { Text("Remove") }
-                }
-            }
-            (voiceState as? VoiceState.Error)?.let {
-                Text(it.message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp, 8.dp))
-            }
             RadioRow(st.voiceMode == VoicePlayMode.AUTO_ONCE, "Play once after answering", null) { vm.setVoiceMode(VoicePlayMode.AUTO_ONCE) }
             RadioRow(st.voiceMode == VoicePlayMode.AUTO_REPEAT, "Repeat until the call ends", null) { vm.setVoiceMode(VoicePlayMode.AUTO_REPEAT) }
             RadioRow(st.voiceMode == VoicePlayMode.MANUAL, "Only when I tap Play", "You can replay it any time during the call") { vm.setVoiceMode(VoicePlayMode.MANUAL) }

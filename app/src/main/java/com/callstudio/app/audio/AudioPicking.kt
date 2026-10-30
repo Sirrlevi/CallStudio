@@ -3,6 +3,7 @@ package com.callstudio.app.audio
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.media.MediaMetadataRetriever
 import android.media.RingtoneManager
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -39,6 +40,19 @@ object AudioFiles {
         RingtoneManager.getRingtone(context, uri)?.getTitle(context)
     } catch (e: Exception) {
         null
+    }
+
+    /** Quick check that Android recognises the file as audio, so problems show up when it is chosen, not mid-call. */
+    fun isPlayable(context: Context, uri: Uri): Boolean {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, uri)
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes"
+        } catch (e: Exception) {
+            false
+        } finally {
+            runCatching { retriever.release() }
+        }
     }
 
     /** Keeps read access to a Storage Access Framework file across restarts. */

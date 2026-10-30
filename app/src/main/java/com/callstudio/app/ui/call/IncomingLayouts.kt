@@ -62,6 +62,7 @@ fun IncomingCallScreen(theme: CallTheme, caller: CallerUi, actions: IncomingActi
         CallTheme.ONE_UI -> OneUiIncoming(caller, actions)
         CallTheme.IOS -> IosIncoming(caller, actions)
         CallTheme.VIVO -> VivoIncoming(caller, actions)
+        CallTheme.TRUECALLER -> TruecallerIncoming(caller, actions)
         CallTheme.MINIMAL_DARK -> MinimalDarkIncoming(caller, actions)
         CallTheme.MINIMAL_LIGHT -> MinimalLightIncoming(caller, actions)
     }

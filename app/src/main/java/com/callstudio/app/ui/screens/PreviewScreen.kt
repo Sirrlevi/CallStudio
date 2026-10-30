@@ -37,7 +37,6 @@ import com.callstudio.app.ui.call.InCallModel
 import com.callstudio.app.ui.call.InCallScreen
 import com.callstudio.app.ui.call.IncomingActions
 import com.callstudio.app.ui.call.IncomingCallScreen
-import com.callstudio.app.ui.call.voiceControl
 import com.callstudio.app.ui.components.AppTopBar
 import com.callstudio.app.ui.components.EmptyState
 import com.callstudio.app.ui.components.LoadingBox
@@ -48,7 +47,6 @@ import kotlinx.coroutines.delay
 fun PreviewScreen(nav: NavController, callerId: Long, vm: PreviewViewModel = viewModel()) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val live by vm.liveCall.collectAsStateWithLifecycle()
-    val voice by vm.voiceState.collectAsStateWithLifecycle()
     LaunchedEffect(callerId) { vm.loadCaller(callerId) }
 
     val s = settings
@@ -81,7 +79,6 @@ fun PreviewScreen(nav: NavController, callerId: Long, vm: PreviewViewModel = vie
                 } else {
                     val controls = buildList {
                         add(ControlSpec("speaker", "Speaker", Icons.Filled.VolumeUp, vm.speakerOn, onClick = { vm.toggleSpeaker() }))
-                        voiceControl(voice) { vm.voiceToggle() }?.let { add(it) }
                     }
                     InCallScreen(s.theme, InCallModel(caller, (now - start).coerceAtLeast(0L), null, controls, onEnd = leave))
                 }

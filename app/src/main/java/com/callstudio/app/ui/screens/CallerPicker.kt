@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.callstudio.app.data.CallerEntity
+import com.callstudio.app.data.displayNumber
 import com.callstudio.app.ui.components.CallerAvatar
 
 @Composable
@@ -29,7 +30,7 @@ fun CallerPickDialog(
                 items(callers, key = { it.id }) { c ->
                     ListItem(
                         headlineContent = { Text(c.name) },
-                        supportingContent = if (c.phone.isNotBlank()) ({ Text(c.phone) }) else null,
+                        supportingContent = if (c.phone.isNotBlank()) ({ Text(c.displayNumber()) }) else null,
                         leadingContent = { CallerAvatar(c.photoFile, c.name, 40.dp) },
                         modifier = Modifier.clickable { onPick(c) },
                     )

@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.Log
 import com.callstudio.app.audio.AudioRouter
+import com.callstudio.app.audio.VoiceLeases
 import com.callstudio.app.audio.RingtonePlayer
 import com.callstudio.app.audio.VoicePlayer
 import com.callstudio.app.audio.VoiceState
@@ -47,6 +48,7 @@ class CallSessionManager(
     private val recordings: RecordingRepository,
     private val settings: SettingsStore,
     private val notifications: NotificationHelper,
+    private val leases: VoiceLeases,
 ) {
     private val gate = CompletableDeferred<Unit>()
     private val mutex = Mutex()
@@ -60,6 +62,8 @@ class CallSessionManager(
 
     private var ringTimeoutJob: Job? = null
     private var ringingStarted = false
+    private var heldClipWasPlaying = false
+    private var heldRecordingWasRunning = false
 
     init {
         scope.launch { voice.state.collect { v -> _session.update { it.copy(voice = v) } } }
@@ -122,7 +126,12 @@ class CallSessionManager(
             callerName = e.callerName,
             callerPhone = e.callerPhone,
             callerPhotoFile = e.callerPhotoFile,
+            callerCountry = e.callerCountry,
+            voiceUri = e.voiceUri,
+            voiceLabel = e.voiceLabel,
         )
+        heldClipWasPlaying = false
+        heldRecordingWasRunning = false
         if (!CallService.start(app)) notifications.postBackupIncoming(_session.value)
         val timeout = settings.current().ringTimeoutSeconds * 1000L
         ringTimeoutJob?.cancel()
@@ -208,7 +217,7 @@ class CallSessionManager(
             )
         }
         if (!CallService.isRunning) CallService.start(app)
-        val playable = withContext(Dispatchers.IO) { voice.load(st.voiceUri, repeat = st.voiceMode == VoicePlayMode.AUTO_REPEAT) }
+        val playable = withContext(Dispatchers.IO) { voice.load(s.voiceUri, repeat = st.voiceMode == VoicePlayMode.AUTO_REPEAT) }
         if (playable && st.voiceMode != VoicePlayMode.MANUAL) voice.play()
     }
 
@@ -258,12 +267,16 @@ class CallSessionManager(
         calls.get(s.eventId)?.let {
             calls.update(it.copy(status = status.name, endedAtMillis = System.currentTimeMillis(), endReason = reason))
         }
+        leases.releaseIfUnused(s.voiceUri)
+        heldClipWasPlaying = false
+        heldRecordingWasRunning = false
         _session.value = SessionState()
         notifications.cancelAll()
     }
 
     private suspend fun closeEvent(e: CallEventEntity, status: CallStatus, reason: String) {
         calls.update(e.copy(status = status.name, endedAtMillis = System.currentTimeMillis(), endReason = reason))
+        leases.releaseIfUnused(e.voiceUri)
     }
 
     // ---- in-call controls --------------------------------------------------------------------------------
@@ -305,11 +318,34 @@ class CallSessionManager(
         }
     }
 
-    fun voiceToggle(eventId: Long) {
+    /** Hold pauses the caller clip and the recording, and resumes exactly what was running when you resume. */
+    fun toggleHold(eventId: Long) {
         scope.launch {
             mutex.withLock {
                 val s = _session.value
                 if (s.eventId != eventId || s.status != CallStatus.ACTIVE) return@withLock
+                if (!s.held) {
+                    heldClipWasPlaying = voice.state.value == VoiceState.Playing
+                    if (heldClipWasPlaying) voice.pause()
+                    heldRecordingWasRunning = recorder.state.value is RecorderState.Recording
+                    if (heldRecordingWasRunning) recorder.pause()
+                    _session.update { it.copy(held = true) }
+                } else {
+                    if (heldClipWasPlaying) voice.play()
+                    if (heldRecordingWasRunning) recorder.resume()
+                    heldClipWasPlaying = false
+                    heldRecordingWasRunning = false
+                    _session.update { it.copy(held = false) }
+                }
+            }
+        }
+    }
+
+    fun voiceToggle(eventId: Long) {
+        scope.launch {
+            mutex.withLock {
+                val s = _session.value
+                if (s.eventId != eventId || s.status != CallStatus.ACTIVE || s.held) return@withLock
                 when (val v = voice.state.value) {
                     VoiceState.Playing -> voice.pause()
                     VoiceState.Paused, VoiceState.Ready -> voice.play()
@@ -317,7 +353,7 @@ class CallSessionManager(
                     is VoiceState.Error -> {
                         val st = settings.current()
                         val ok = withContext(Dispatchers.IO) {
-                            voice.load(st.voiceUri, repeat = st.voiceMode == VoicePlayMode.AUTO_REPEAT)
+                            voice.load(s.voiceUri, repeat = st.voiceMode == VoicePlayMode.AUTO_REPEAT)
                         }
                         if (ok) voice.play() else Log.w(TAG, "Voice clip still unavailable: ${v.message}")
                     }
@@ -370,8 +406,8 @@ class CallSessionManager(
         setMessage(UiMessage("Microphone access was denied. You can allow it in the app's settings.", MessageAction.OPEN_APP_SETTINGS))
     }
 
-    fun pauseRecording() { recorder.pause() }
-    fun resumeRecording() { recorder.resume() }
+    fun pauseRecording() { if (!_session.value.held) recorder.pause() }
+    fun resumeRecording() { if (!_session.value.held) recorder.resume() }
 
     fun stopRecording() {
         scope.launch {

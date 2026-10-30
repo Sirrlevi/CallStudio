@@ -29,6 +29,9 @@ object SystemAccess {
     fun exactAlarmsAllowed(ctx: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S || ctx.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
 
+    fun contactsGranted(ctx: Context): Boolean =
+        ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+
     fun micGranted(ctx: Context): Boolean =
         ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 

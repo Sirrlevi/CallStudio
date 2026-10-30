@@ -51,6 +51,7 @@ fun InCallScreen(theme: CallTheme, model: InCallModel) {
         CallTheme.ONE_UI -> OneUiInCall(model)
         CallTheme.IOS -> IosInCall(model)
         CallTheme.VIVO -> VivoInCall(model)
+        CallTheme.TRUECALLER -> TruecallerInCall(model)
         CallTheme.MINIMAL_DARK -> MinimalDarkInCall(model)
         CallTheme.MINIMAL_LIGHT -> MinimalLightInCall(model)
     }

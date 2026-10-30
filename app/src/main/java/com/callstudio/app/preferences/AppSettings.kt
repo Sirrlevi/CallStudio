@@ -12,8 +12,6 @@ data class AppSettings(
     val ringtoneUri: String? = null,
     val ringtoneLabel: String? = null,
     val vibrate: Boolean = true,
-    val voiceUri: String? = null,
-    val voiceLabel: String? = null,
     val voiceMode: VoicePlayMode = VoicePlayMode.AUTO_ONCE,
     val startOnSpeaker: Boolean = false,
     val keepScreenOn: Boolean = true,

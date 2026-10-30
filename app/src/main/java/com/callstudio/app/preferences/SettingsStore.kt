@@ -26,8 +26,6 @@ class SettingsStore(private val context: Context) {
         val RINGTONE_URI = stringPreferencesKey("ringtone_uri")
         val RINGTONE_LABEL = stringPreferencesKey("ringtone_label")
         val VIBRATE = booleanPreferencesKey("vibrate")
-        val VOICE_URI = stringPreferencesKey("voice_uri")
-        val VOICE_LABEL = stringPreferencesKey("voice_label")
         val VOICE_MODE = stringPreferencesKey("voice_mode")
         val START_ON_SPEAKER = booleanPreferencesKey("start_on_speaker")
         val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
@@ -46,8 +44,6 @@ class SettingsStore(private val context: Context) {
                 ringtoneUri = p[K.RINGTONE_URI],
                 ringtoneLabel = p[K.RINGTONE_LABEL],
                 vibrate = p[K.VIBRATE] ?: d.vibrate,
-                voiceUri = p[K.VOICE_URI],
-                voiceLabel = p[K.VOICE_LABEL],
                 voiceMode = parse(p[K.VOICE_MODE], d.voiceMode),
                 startOnSpeaker = p[K.START_ON_SPEAKER] ?: d.startOnSpeaker,
                 keepScreenOn = p[K.KEEP_SCREEN_ON] ?: d.keepScreenOn,
@@ -70,13 +66,6 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun setVibrate(on: Boolean) { context.dataStore.edit { it[K.VIBRATE] = on } }
-
-    suspend fun setVoice(uri: String?, label: String?) {
-        context.dataStore.edit {
-            if (uri == null) it.remove(K.VOICE_URI) else it[K.VOICE_URI] = uri
-            if (label == null) it.remove(K.VOICE_LABEL) else it[K.VOICE_LABEL] = label
-        }
-    }
 
     suspend fun setVoiceMode(mode: VoicePlayMode) { context.dataStore.edit { it[K.VOICE_MODE] = mode.name } }
     suspend fun setStartOnSpeaker(on: Boolean) { context.dataStore.edit { it[K.START_ON_SPEAKER] = on } }

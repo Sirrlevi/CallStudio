@@ -58,6 +58,10 @@ interface CallDao {
 
     @Query("DELETE FROM calls WHERE status NOT IN ('SCHEDULED', 'RINGING', 'ACTIVE')")
     suspend fun clearHistory()
+
+    /** How many calls that haven't finished still need this voice file. */
+    @Query("SELECT COUNT(*) FROM calls WHERE voiceUri = :uri AND status IN ('SCHEDULED', 'RINGING', 'ACTIVE')")
+    suspend fun countActiveWithVoice(uri: String): Int
 }
 
 @Dao

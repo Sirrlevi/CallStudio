@@ -99,7 +99,8 @@ fun SetupScreen(nav: NavController) {
             ),
             SetupItem(
                 "Contacts",
-                "No permission needed. You pick a contact with the system picker, and CallStudio only receives the one you choose.",
+                if (SystemAccess.contactsGranted(ctx)) "Allowed. Used only to copy the photo of the contact you choose."
+                else "Asked when you tap Choose from contacts. It is used only to copy the chosen contact's photo; without it you can still pick a photo yourself.",
                 Status.INFO,
             ),
             SetupItem(

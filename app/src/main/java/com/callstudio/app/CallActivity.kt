@@ -18,6 +18,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.callstudio.app.domain.CallStatus
+import com.callstudio.app.domain.PhoneNumbers
 import com.callstudio.app.notifications.NotificationHelper
 import com.callstudio.app.permissions.SystemAccess
 import com.callstudio.app.session.MessageAction
@@ -83,6 +85,12 @@ class CallActivity : ComponentActivity() {
                         onRecordPause = { viewModel.toggleRecordingPause() },
                         onVoice = { viewModel.voiceToggle() },
                         onEnd = { viewModel.end() },
+                        onHold = { viewModel.toggleHold() },
+                        onMessage = {
+                            val current = viewModel.session.value
+                            if (current.status == CallStatus.RINGING) viewModel.decline()
+                            openMessaging(context, current.callerPhone)
+                        },
                     )
                 }
                 CallHost(
@@ -107,6 +115,17 @@ class CallActivity : ComponentActivity() {
         viewModel.onScreenVisible()
         // Answer is idempotent, so re-delivering this intent after a rotation can't start a second session.
         if (intent.getBooleanExtra(EXTRA_ANSWER, false) && eventId >= 0) viewModel.answerEvent(eventId)
+    }
+
+    /** Opens the messaging app addressed to the caller; does nothing when the caller has no number. */
+    private fun openMessaging(context: Context, displayNumber: String) {
+        val number = PhoneNumbers.dialable(displayNumber)
+        if (number.isBlank()) return
+        try {
+            context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: Exception) {
+            // No messaging app available.
+        }
     }
 
     @Suppress("DEPRECATION")

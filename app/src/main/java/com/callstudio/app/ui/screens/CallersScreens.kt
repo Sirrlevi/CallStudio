@@ -2,6 +2,7 @@
 
 package com.callstudio.app.ui.screens
 
+import android.Manifest
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -59,6 +60,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.callstudio.app.contacts.PickPhoneContract
+import com.callstudio.app.data.displayNumber
+import com.callstudio.app.domain.Countries
+import com.callstudio.app.domain.PhoneNumbers
+import com.callstudio.app.permissions.SystemAccess
 import com.callstudio.app.data.CallerEntity
 import com.callstudio.app.ui.Routes
 import com.callstudio.app.ui.components.AppTopBar
@@ -95,7 +100,7 @@ fun CallersScreen(nav: NavController, vm: CallersViewModel = viewModel()) {
                     items(list, key = { it.id }) { c ->
                         ListItem(
                             headlineContent = { Text(c.name) },
-                            supportingContent = if (c.phone.isNotBlank()) ({ Text(c.phone) }) else null,
+                            supportingContent = if (c.phone.isNotBlank()) ({ Text(c.displayNumber()) }) else null,
                             leadingContent = { CallerAvatar(c.photoFile, c.name, 44.dp) },
                             trailingContent = {
                                 Row {
@@ -133,16 +138,20 @@ fun CallerEditScreen(nav: NavController, callerId: Long, vm: CallersViewModel = 
     var loaded by rememberSaveable { mutableStateOf(callerId <= 0) }
     var name by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
+    var iso by rememberSaveable { mutableStateOf(Countries.defaultIso()) }
     var photo by rememberSaveable { mutableStateOf<String?>(null) }
     var originalPhoto by rememberSaveable { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var notice by remember { mutableStateOf<String?>(null) }
+    var showCountries by remember { mutableStateOf(false) }
 
     LaunchedEffect(callerId) {
         if (!loaded) {
             vm.load(callerId)?.let {
                 name = it.name
-                phone = it.phone
+                iso = it.countryIso.ifBlank { Countries.defaultIso() }
+                phone = PhoneNumbers.group(it.phone, iso)
                 photo = it.photoFile
                 originalPhoto = it.photoFile
             }
@@ -176,11 +185,24 @@ fun CallerEditScreen(nav: NavController, callerId: Long, vm: CallersViewModel = 
                 error = "That contact couldn't be read."
             } else {
                 error = null
-                name = picked.first.name
-                phone = picked.first.number
-                if (picked.second != null) replacePhoto(picked.second)
+                if (picked.info.name.isNotBlank()) name = picked.info.name
+                val parsed = PhoneNumbers.normalize(picked.info.number, iso)
+                iso = parsed.iso
+                phone = PhoneNumbers.group(parsed.national, parsed.iso)
+                notice = when {
+                    picked.photoFile != null -> null
+                    !SystemAccess.contactsGranted(ctx) ->
+                        "Contacts access is off, so the contact's photo couldn't be copied. Allow it in app settings, or choose a photo yourself."
+                    photo == null -> "This contact has no photo saved."
+                    else -> null
+                }
+                if (picked.photoFile != null) replacePhoto(picked.photoFile)
             }
         }
+    }
+    // Asked only here, when you choose from contacts. Either answer still opens the picker.
+    val contactsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        contactPicker.launch(Unit)
     }
 
     fun save(thenPreview: Boolean) {
@@ -190,13 +212,17 @@ fun CallerEditScreen(nav: NavController, callerId: Long, vm: CallersViewModel = 
         }
         scope.launch {
             busy = true
-            val id = vm.save(callerId.coerceAtLeast(0), name, phone, photo)
+            val parsed = PhoneNumbers.normalize(phone, iso)
+            val id = vm.save(callerId.coerceAtLeast(0), name, parsed.national, parsed.iso, photo)
             busy = false
             if (thenPreview) {
                 nav.navigate(Routes.preview(id)) { popUpTo(Routes.CALLER_EDIT) { inclusive = true } }
             } else nav.popBackStack()
         }
     }
+
+    val parsedNow = PhoneNumbers.normalize(phone, iso)
+    val shownNumber = PhoneNumbers.display(parsedNow.iso, parsedNow.national)
 
     Scaffold(topBar = { AppTopBar(if (callerId > 0) "Edit caller" else "New caller", onBack = { leave() }) }) { pad ->
         Column(
@@ -215,7 +241,13 @@ fun CallerEditScreen(nav: NavController, callerId: Long, vm: CallersViewModel = 
                 }
                 if (photo != null) TextButton(onClick = { replacePhoto(null) }) { Text("Remove") }
             }
-            OutlinedButton(onClick = { contactPicker.launch(Unit) }, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = {
+                    if (SystemAccess.contactsGranted(ctx)) contactPicker.launch(Unit)
+                    else contactsPermission.launch(Manifest.permission.READ_CONTACTS)
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 Icon(Icons.Filled.Contacts, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("Choose from contacts")
@@ -224,9 +256,23 @@ fun CallerEditScreen(nav: NavController, callerId: Long, vm: CallersViewModel = 
                 value = name, onValueChange = { name = it.take(60) }, label = { Text("Name") },
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedTextField(
-                value = phone, onValueChange = { phone = it.take(32) }, label = { Text("Phone number") },
-                singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = { showCountries = true }, modifier = Modifier.height(56.dp)) {
+                    Text("${Countries.flag(iso)} ${Countries.dialLabelOf(iso)}")
+                }
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = { v -> phone = v.filter { it.isDigit() || it == ' ' || it == '+' || it == '-' }.take(30) },
+                    label = { Text("Phone number") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Text(
+                "Country: ${Countries.nameOf(iso) ?: "Not set"}. Typing + and a code (for example +91) switches the country.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
             )
             Card(Modifier.fillMaxWidth()) {
@@ -234,11 +280,12 @@ fun CallerEditScreen(nav: NavController, callerId: Long, vm: CallersViewModel = 
                     CallerAvatar(photo, name.ifBlank { phone }, 48.dp)
                     Spacer(Modifier.width(16.dp))
                     Column {
-                        Text(name.ifBlank { phone.ifBlank { "Caller" } }, style = MaterialTheme.typography.titleMedium)
-                        Text("Mobile · ${phone.ifBlank { "no number" }}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(name.ifBlank { shownNumber.ifBlank { "Caller" } }, style = MaterialTheme.typography.titleMedium)
+                        Text("Mobile · ${shownNumber.ifBlank { "no number" }}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
+            notice?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth()) }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(onClick = { save(false) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Save") }
             OutlinedButton(onClick = { save(true) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
@@ -248,5 +295,12 @@ fun CallerEditScreen(nav: NavController, callerId: Long, vm: CallersViewModel = 
             }
             Spacer(Modifier.height(8.dp))
         }
+    }
+
+    if (showCountries) {
+        CountryPickerDialog(
+            onPick = { iso = it.iso; showCountries = false },
+            onDismiss = { showCountries = false },
+        )
     }
 }

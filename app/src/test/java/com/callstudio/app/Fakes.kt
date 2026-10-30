@@ -48,6 +48,9 @@ class FakeCallDao : CallDao {
     override fun observeHistory(): Flow<List<CallEventEntity>> =
         flowOf(rows.values.filter { it.status !in listOf("SCHEDULED", "RINGING", "ACTIVE") })
 
+    override suspend fun countActiveWithVoice(uri: String): Int =
+        rows.values.count { it.voiceUri == uri && it.status in listOf("SCHEDULED", "RINGING", "ACTIVE") }
+
     override suspend fun clearHistory() {
         rows.entries.removeAll { it.value.status !in listOf("SCHEDULED", "RINGING", "ACTIVE") }
     }

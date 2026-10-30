@@ -21,7 +21,10 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Card
@@ -48,6 +51,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.callstudio.app.data.displayNumber
+import com.callstudio.app.domain.Countries
 import com.callstudio.app.ui.call.CallerUi
 import com.callstudio.app.ui.call.ControlSpec
 import com.callstudio.app.ui.call.InCallModel
@@ -65,7 +70,7 @@ fun ThemeScreen(nav: NavController, vm: SettingsViewModel = viewModel(), callers
     val callers by callersVm.callers.collectAsStateWithLifecycle()
     var showInCall by rememberSaveable { mutableStateOf(false) }
     val first = callers?.firstOrNull()
-    val sample = first?.let { CallerUi(it.name, it.phone, it.photoFile) } ?: CallerUi("Alex Morgan", "+1 555 0100", null)
+    val sample = first?.let { CallerUi(it.name, it.displayNumber(), it.photoFile, Countries.nameOf(it.countryIso)) } ?: CallerUi("Alex Morgan", "+1 555 010 0100", null, "United States")
 
     Scaffold(topBar = { AppTopBar("Call theme", onBack = { nav.popBackStack() }) }) { pad ->
         Column(Modifier.padding(pad)) {
@@ -99,6 +104,11 @@ fun ThemeScreen(nav: NavController, vm: SettingsViewModel = viewModel(), callers
                                                 ControlSpec("record", "Record", Icons.Filled.FiberManualRecord, onClick = {}),
                                             ),
                                             onEnd = {},
+                                            extraControls = listOf(
+                                                ControlSpec("keypad", "Keypad", Icons.Filled.Dialpad, onClick = {}),
+                                                ControlSpec("hold", "Hold", Icons.Filled.Pause, onClick = {}),
+                                                ControlSpec("message", "Message", Icons.Filled.Sms, onClick = {}),
+                                            ),
                                         ),
                                     )
                                 } else {

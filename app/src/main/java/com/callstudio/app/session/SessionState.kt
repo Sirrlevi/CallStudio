@@ -16,6 +16,11 @@ data class SessionState(
     val callerName: String = "",
     val callerPhone: String = "",
     val callerPhotoFile: String? = null,
+    val callerCountry: String? = null,
+    /** Voice clip chosen for this particular call (null = no clip). */
+    val voiceUri: String? = null,
+    val voiceLabel: String? = null,
+    val held: Boolean = false,
     val answeredAtMillis: Long = 0L,
     /** SystemClock.elapsedRealtime() at answer time; used for the on-screen timer. */
     val answeredElapsed: Long = 0L,

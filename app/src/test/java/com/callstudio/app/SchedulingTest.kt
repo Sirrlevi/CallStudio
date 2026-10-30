@@ -1,5 +1,6 @@
 package com.callstudio.app
 
+import com.callstudio.app.audio.VoiceLeases
 import com.callstudio.app.data.CallerEntity
 import com.callstudio.app.domain.ScheduleSpec
 import com.callstudio.app.scheduling.ScheduleCoordinator
@@ -13,6 +14,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDateTime
+import java.util.Locale
 import java.time.ZoneId
 
 class SchedulingTest {
@@ -127,5 +129,56 @@ class SchedulingTest {
         val keep = (coordinator.schedule(sam, ScheduleSpec.AfterMinutes(5)) as Outcome.Scheduled).event.id
         coordinator.cancelForCaller(alex.id)
         assertEquals(listOf(keep), backend.alarms.keys.toList())
+    }
+
+    // ---- per-call voice clips and phone display ----------------------------------------------------------
+
+    private val released = mutableListOf<String>()
+    private val withLeases = ScheduleCoordinator(
+        dao, SchedulingEngine(backend), clock = { now }, zone = { zone },
+        leases = VoiceLeases(dao, release = { released.add(it) }),
+    )
+
+    @Test fun eachCallKeepsItsOwnVoiceClip() = runTest {
+        val a = (withLeases.schedule(alex, ScheduleSpec.AfterMinutes(5), voice = ScheduleCoordinator.VoiceClip("content://a", "a.mp3")) as Outcome.Scheduled).event
+        val b = (withLeases.schedule(sam, ScheduleSpec.AfterMinutes(10), voice = ScheduleCoordinator.VoiceClip("content://b", "b.mp3")) as Outcome.Scheduled).event
+        val none = (withLeases.schedule(CallerEntity(id = 3, name = "Kim", phone = "1", createdAt = 0), ScheduleSpec.AfterMinutes(15)) as Outcome.Scheduled).event
+        assertEquals("content://a", dao.rows[a.id]!!.voiceUri)
+        assertEquals("content://b", dao.rows[b.id]!!.voiceUri)
+        assertNull(dao.rows[none.id]!!.voiceUri)
+    }
+
+    @Test fun clipAccessIsReleasedOnlyWhenNoOtherUnfinishedCallUsesIt() = runTest {
+        val clip = ScheduleCoordinator.VoiceClip("content://shared", "shared.mp3")
+        val first = (withLeases.schedule(alex, ScheduleSpec.AfterMinutes(5), voice = clip) as Outcome.Scheduled).event.id
+        val second = (withLeases.schedule(sam, ScheduleSpec.AfterMinutes(10), voice = clip) as Outcome.Scheduled).event.id
+        withLeases.cancel(first)
+        assertTrue(released.isEmpty())
+        withLeases.cancel(second)
+        assertEquals(listOf("content://shared"), released)
+    }
+
+    @Test fun changingTheClipOnAnEditReleasesTheOldOne() = runTest {
+        val id = (withLeases.schedule(alex, ScheduleSpec.AfterMinutes(5), voice = ScheduleCoordinator.VoiceClip("content://old", "old")) as Outcome.Scheduled).event.id
+        withLeases.schedule(alex, ScheduleSpec.AfterMinutes(6), editingEventId = id, voice = ScheduleCoordinator.VoiceClip("content://new", "new"))
+        assertEquals(listOf("content://old"), released)
+        assertEquals("content://new", dao.rows[id]!!.voiceUri)
+    }
+
+    @Test fun missedCallReleasesItsClip() = runTest {
+        val id = (withLeases.schedule(alex, ScheduleSpec.AfterSeconds(30), voice = ScheduleCoordinator.VoiceClip("content://late", "late")) as Outcome.Scheduled).event.id
+        backend.alarms.clear()
+        now += 30 * 60_000
+        withLeases.recover(recomputeWallClock = false)
+        assertEquals("MISSED", dao.rows[id]!!.status)
+        assertEquals(listOf("content://late"), released)
+    }
+
+    @Test fun callSnapshotKeepsCountryCodeSeparateFromTheNumber() = runTest {
+        Locale.setDefault(Locale.US)
+        val indian = CallerEntity(id = 9, name = "Sonu", phone = "8059056588", countryIso = "IN", createdAt = 0)
+        val e = (coordinator.schedule(indian, ScheduleSpec.AfterMinutes(5)) as Outcome.Scheduled).event
+        assertEquals("+91 80590 56588", dao.rows[e.id]!!.callerPhone)
+        assertEquals("India", dao.rows[e.id]!!.callerCountry)
     }
 }
