@@ -10,9 +10,9 @@ It does **not** place real calls, contact anyone, or send audio anywhere. There 
 
 1. Push this project to a GitHub repository (branch `main` or `master`). The workflow in `.github/workflows/android.yml` runs on every push to `main`. You can also start it manually: **Actions** tab → **Android CI** → **Run workflow**.
 2. Open the repository's **Actions** tab and click the most recent **Android CI** run. A green check means unit tests and the build passed. A red cross means something failed: open the failing step for the log.
-3. Scroll to the **Artifacts** section at the bottom of the run page and click **CallStudio-debug-apk** to download a zip (kept for 30 days).
-4. Unzip it. Inside is `app-debug.apk`.
-5. Copy the APK to your phone (or download the artifact on the phone directly) and open it. If Android asks, allow your browser or file manager to **install unknown apps**, then tap **Install**. This is a debug-signed build for personal use.
+3. Easiest download: on the repository's main page open **Releases** (right side on a phone, below "About") and choose **CallStudio debug build (latest)**. Under **Assets** tap **CallStudio-debug.apk**. This copy is replaced on every successful build.
+4. Also available when the account has artifact storage left: the run page's **Artifacts** section, **CallStudio-debug-apk** (kept 3 days). Unzip it to get `app-debug.apk`. GitHub's free artifact storage quota fills up quickly, which is why the Releases copy exists.
+5. Open the APK on your phone. If Android asks, allow your browser or file manager to **install unknown apps**, then tap **Install**. This is a debug-signed build for personal use.
 
 ## Turn on what the app needs
 

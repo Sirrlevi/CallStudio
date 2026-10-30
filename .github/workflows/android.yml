@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write   # lets the job publish the APK as a release asset
 
 concurrency:
   group: android-ci-${{ github.ref }}
@@ -51,19 +51,37 @@ jobs:
           echo "Found $APK"
           echo "path=$APK" >> "$GITHUB_OUTPUT"
 
-      - name: Upload debug APK
+      # Release assets do not count against the Actions artifact storage quota.
+      - name: Publish APK to the debug-latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp "${{ steps.apk.outputs.path }}" CallStudio-debug.apk
+          TAG=debug-latest
+          NOTES="Debug build from commit ${GITHUB_SHA::7}. Not signed for the Play Store."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes "$NOTES"
+          else
+            gh release create "$TAG" --title "CallStudio debug build (latest)" --notes "$NOTES" --prerelease --target "$GITHUB_SHA"
+          fi
+          gh release upload "$TAG" CallStudio-debug.apk --clobber
+
+      # Optional copy as a workflow artifact. Free accounts have a small storage quota, so a failure here is ignored.
+      - name: Upload debug APK artifact
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: CallStudio-debug-apk
           path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 3
 
-      - name: Upload test reports
-        if: always()
+      - name: Upload test reports (only when something failed)
+        if: failure()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: CallStudio-test-reports
           path: app/build/reports/tests/
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 3
