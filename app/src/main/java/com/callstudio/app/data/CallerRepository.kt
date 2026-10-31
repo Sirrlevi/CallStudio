@@ -33,6 +33,10 @@ class CallerRepository(
         }
     }
 
+    /** Assigns the SIM region to legacy ten-digit local numbers that had no country field. */
+    suspend fun fillMissingLocalCountry(iso: String) {
+        if (iso.isNotBlank()) dao.fillMissingLocalCountry(iso)
+    }
     /**
      * Adds phonebook entries without duplicating numbers already saved in Phone.
      * Existing caller names/photos are never overwritten by an automatic sync.
