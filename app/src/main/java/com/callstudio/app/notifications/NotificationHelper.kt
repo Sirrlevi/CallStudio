@@ -14,6 +14,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Color as AndroidColor
+import android.widget.RemoteViews
 import android.media.AudioAttributes
 import android.net.Uri
 import android.provider.Settings
@@ -95,38 +96,33 @@ class NotificationHelper(private val context: Context, private val photos: Photo
     fun buildOngoing(s: SessionState): Notification {
         val hangUp = broadcastIntent(s.eventId, ACTION_END, RequestCodes.HANG_UP)
         val mute = broadcastIntent(s.eventId, ACTION_TOGGLE_MUTE, RequestCodes.MUTE)
-        val recording = s.recording.isActive
         val badgeStyle = readBadgeStyle()
-        val portrait = avatar(s.callerPhotoFile, badgeStyle, useSystemAppBadge = true)
-        val person = Person.Builder()
-            .setName(s.displayName.ifBlank { "Unknown" })
-            .setImportant(true)
-            .apply { portrait?.let { setIcon(IconCompat.createWithBitmap(it)) } }
-            .build()
+        // Do not use CallStyle here: on some Android skins it forcibly overlays the
+        // system/Android app badge on the caller portrait. This custom card keeps the
+        // caller photo clean and lets the user choose the optional online/app marker.
+        val portrait = avatar(s.callerPhotoFile, badgeStyle)
+        val remote = RemoteViews(context.packageName, R.layout.notification_ongoing).apply {
+            setTextViewText(R.id.call_title, s.displayName.ifBlank { "Unknown" })
+            setTextViewText(R.id.call_status, if (s.recording.isActive) "Ongoing call · Recording" else "Ongoing call")
+            setTextViewText(R.id.action_mute, if (s.muted) "Unmute" else "Mute")
+            if (portrait != null) setImageViewBitmap(R.id.call_avatar, portrait)
+            setOnClickPendingIntent(R.id.ongoing_root, activityIntent(s.eventId, answer = false))
+            setOnClickPendingIntent(R.id.action_hangup, hangUp)
+            setOnClickPendingIntent(R.id.action_mute, mute)
+        }
 
-        // Android's native CallStyle renders the person photo on the left and places the
-        // Phone app icon on its lower-right corner, matching the standard ongoing-call card.
         return NotificationCompat.Builder(context, CHANNEL_ONGOING)
-            .setSmallIcon(if (badgeStyle == NotificationBadgeStyle.ONLINE_DOT) R.drawable.ic_notification_clear else R.drawable.ic_notification)
-            .setContentTitle(s.displayName)
-            .setContentText(if (recording) "Ongoing call · Recording" else "Ongoing call")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(s.displayName.ifBlank { "Ongoing call" })
+            .setContentText("Ongoing call")
             .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setColor(AndroidColor.rgb(0, 82, 88))
-            .setColorized(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setUsesChronometer(true)
-            .setShowWhen(true)
-            .setWhen(s.answeredAtMillis)
             .setContentIntent(activityIntent(s.eventId, answer = false))
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setStyle(NotificationCompat.CallStyle.forOngoingCall(person, hangUp))
-            .addAction(
-                if (s.muted) R.drawable.ic_action_unmute else R.drawable.ic_action_mute,
-                if (s.muted) "Unmute" else "Mute",
-                mute,
-            )
+            .setCustomContentView(remote)
+            .setCustomBigContentView(remote)
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .build()
     }
 
