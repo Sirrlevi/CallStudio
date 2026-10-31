@@ -19,8 +19,6 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.app.Person
-import androidx.core.graphics.drawable.IconCompat
 import com.callstudio.app.CallActivity
 import com.callstudio.app.R
 import com.callstudio.app.data.PhotoStore
@@ -66,10 +64,17 @@ class NotificationHelper(private val context: Context, private val photos: Photo
         val open = activityIntent(s.eventId, answer = false)
         val answer = activityIntent(s.eventId, answer = true)
         val decline = broadcastIntent(s.eventId, ACTION_DECLINE, RequestCodes.DECLINE)
+        val badgeStyle = runCatching {
+            val raw = context.getSharedPreferences(SettingsStore.NOTIFICATION_PREF_FILE, Context.MODE_PRIVATE)
+                .getString(SettingsStore.NOTIFICATION_PREF_KEY, NotificationBadgeStyle.APP_LOGO.name)
+            NotificationBadgeStyle.valueOf(raw ?: NotificationBadgeStyle.APP_LOGO.name)
+        }.getOrDefault(NotificationBadgeStyle.APP_LOGO)
+        val callerPortrait = avatar(s.callerPhotoFile, badgeStyle)
         val b = NotificationCompat.Builder(context, if (backup) CHANNEL_BACKUP else CHANNEL_INCOMING)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(s.displayName)
             .setContentText("Incoming call")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("Incoming call"))
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -77,13 +82,13 @@ class NotificationHelper(private val context: Context, private val photos: Photo
             .setAutoCancel(false)
             .setContentIntent(open)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-        // Without full-screen access this stays a heads-up notification.
+            .addAction(0, "Decline", decline)
+            .addAction(0, "Answer", answer)
+
+        if (callerPortrait != null) b.setLargeIcon(callerPortrait)
+        // The full-screen activity remains responsible for the Truecaller-style incoming UI.
+        // A standard call-category notification avoids Android's extra app-icon badge on the photo.
         if (SystemAccess.fullScreenAllowed(context)) b.setFullScreenIntent(open, true)
-        if (backup) {
-            b.addAction(0, "Decline", decline).addAction(0, "Answer", answer)
-        } else {
-            b.setStyle(NotificationCompat.CallStyle.forIncomingCall(person(s), decline, answer))
-        }
         val n = b.build()
         if (backup) n.flags = n.flags or Notification.FLAG_INSISTENT
         return n
@@ -166,17 +171,6 @@ class NotificationHelper(private val context: Context, private val photos: Photo
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-    }
-
-    private fun person(s: SessionState): Person {
-        val builder = Person.Builder().setName(s.displayName.ifBlank { "Unknown" }).setImportant(true)
-        val badgeStyle = runCatching {
-            val raw = context.getSharedPreferences(SettingsStore.NOTIFICATION_PREF_FILE, Context.MODE_PRIVATE)
-                .getString(SettingsStore.NOTIFICATION_PREF_KEY, NotificationBadgeStyle.APP_LOGO.name)
-            NotificationBadgeStyle.valueOf(raw ?: NotificationBadgeStyle.APP_LOGO.name)
-        }.getOrDefault(NotificationBadgeStyle.APP_LOGO)
-        avatar(s.callerPhotoFile, badgeStyle)?.let { builder.setIcon(IconCompat.createWithBitmap(it)) }
-        return builder.build()
     }
 
     /** Makes a true circular contact portrait and composites the user's chosen badge into it. */
