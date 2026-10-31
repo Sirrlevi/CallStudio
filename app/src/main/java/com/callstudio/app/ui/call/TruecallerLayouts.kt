@@ -241,14 +241,14 @@ fun TruecallerIncoming(c: CallerUi, a: IncomingActions) {
             ) {
                 GrowButton(
                     color = TcRed, icon = Icons.Filled.CallEnd, description = "Decline",
-                    pressed = pressed == 1, dimmed = pressed == 2,
+                    pressed = pressed == 1, dragProgress = dragProgress, dimmed = pressed == 2,
                     onPressChange = { down -> pressed = if (down) 1 else 0; if (!down) dragProgress = 0f },
                     onDragProgress = { dragProgress = it },
                     onTrigger = a.onDecline,
                 )
                 GrowButton(
                     color = TcGreen, icon = Icons.Filled.Call, description = "Answer",
-                    pressed = pressed == 2, dimmed = pressed == 1,
+                    pressed = pressed == 2, dragProgress = dragProgress, dimmed = pressed == 1,
                     onPressChange = { down -> pressed = if (down) 2 else 0; if (!down) dragProgress = 0f },
                     onDragProgress = { dragProgress = it },
                     onTrigger = a.onAnswer,
@@ -278,6 +278,7 @@ private fun GrowButton(
     icon: ImageVector,
     description: String,
     pressed: Boolean,
+    dragProgress: Float,
     dimmed: Boolean,
     onPressChange: (Boolean) -> Unit,
     onDragProgress: (Float) -> Unit,
