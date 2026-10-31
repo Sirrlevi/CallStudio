@@ -19,7 +19,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,7 +70,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,6 +84,7 @@ import androidx.compose.ui.zIndex
 import com.callstudio.app.domain.TimeFormat
 import com.callstudio.app.ui.components.CallerAvatar
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 
 private val TcGradient = Brush.verticalGradient(
     0f to Color(0xFF1570F5),
@@ -113,7 +117,15 @@ private fun Modifier.entrance(progress: State<Float>): Modifier = graphicsLayer 
 
 @Composable
 private fun TcTitle(modifier: Modifier = Modifier) {
-    Text("Caller ID", modifier, color = Color.White, fontSize = 28.sp, fontFamily = TcFont, fontWeight = FontWeight.Bold)
+    val title = buildAnnotatedString {
+        pushStyle(SpanStyle(fontWeight = FontWeight.Medium, fontFamily = TcFont))
+        append("Identified by ")
+        pop()
+        pushStyle(SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic, fontFamily = FontFamily.Cursive))
+        append("truecaller")
+        pop()
+    }
+    Text(title, modifier, color = Color.White, fontSize = 25.sp, fontFamily = TcFont, textAlign = TextAlign.Center)
 }
 
 @Composable
@@ -190,6 +202,7 @@ private fun RippleAvatar(c: CallerUi, size: Dp, rippling: Boolean = true) {
 @Composable
 fun TruecallerIncoming(c: CallerUi, a: IncomingActions) {
     var pressed by remember { mutableIntStateOf(0) } // 0 none, 1 decline, 2 answer
+    var dragProgress by remember { mutableFloatStateOf(0f) }
     var showProfile by remember { mutableStateOf(false) }
     val titleIn = rememberEntrance(0)
     val lineIn = rememberEntrance(90)
@@ -229,13 +242,15 @@ fun TruecallerIncoming(c: CallerUi, a: IncomingActions) {
                 GrowButton(
                     color = TcRed, icon = Icons.Filled.CallEnd, description = "Decline",
                     pressed = pressed == 1, dimmed = pressed == 2,
-                    onPressChange = { down -> pressed = if (down) 1 else 0 },
+                    onPressChange = { down -> pressed = if (down) 1 else 0; if (!down) dragProgress = 0f },
+                    onDragProgress = { dragProgress = it },
                     onTrigger = a.onDecline,
                 )
                 GrowButton(
                     color = TcGreen, icon = Icons.Filled.Call, description = "Answer",
                     pressed = pressed == 2, dimmed = pressed == 1,
-                    onPressChange = { down -> pressed = if (down) 2 else 0 },
+                    onPressChange = { down -> pressed = if (down) 2 else 0; if (!down) dragProgress = 0f },
+                    onDragProgress = { dragProgress = it },
                     onTrigger = a.onAnswer,
                 )
             }
@@ -256,10 +271,7 @@ fun TruecallerIncoming(c: CallerUi, a: IncomingActions) {
     if (showProfile) ProfileDialog(c) { showProfile = false }
 }
 
-/**
- * Press and hold: the button swells to fill the lower half while the other one fades; release to confirm, or slide
- * your finger off the button to cancel. A plain tap works too.
- */
+/** A tap activates immediately; dragging upward grows this button around its fixed centre until release. */
 @Composable
 private fun GrowButton(
     color: Color,
@@ -268,11 +280,13 @@ private fun GrowButton(
     pressed: Boolean,
     dimmed: Boolean,
     onPressChange: (Boolean) -> Unit,
+    onDragProgress: (Float) -> Unit,
     onTrigger: () -> Unit,
 ) {
+    // The scale is applied around the button's own centre. The button never translates or follows the finger.
     val scale by animateFloatAsState(
-        if (pressed) 3.4f else 1f,
-        spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow),
+        targetValue = if (pressed) 1.18f + 2.02f * dragProgress else 1f,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow),
         label = "grow",
     )
     val dim by animateFloatAsState(if (dimmed) 0.3f else 1f, tween(250), label = "dim")
@@ -283,18 +297,45 @@ private fun GrowButton(
     )
     val haptic = LocalHapticFeedback.current
     val currentPress by rememberUpdatedState(onPressChange)
+    val currentDrag by rememberUpdatedState(onDragProgress)
     val currentTrigger by rememberUpdatedState(onTrigger)
 
     Box(
         Modifier.size(100.dp).zIndex(if (pressed) 2f else 0f).graphicsLayer { alpha = dim }
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
+                    val down = awaitFirstDown(requireUnconsumed = false)
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     currentPress(true)
-                    val up = waitForUpOrCancellation()
+                    currentDrag(0f)
+                    val maxDragPx = size.height * 1.25f
+                    var maxProgress = 0f
+                    var lastDx = 0f
+                    var lastDy = 0f
+                    var horizontalCancel = false
+                    var receivedUp = false
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        lastDx = change.position.x - down.position.x
+                        lastDy = down.position.y - change.position.y
+                        if (abs(lastDx) > size.width * 0.75f) horizontalCancel = true
+                        val progress = (lastDy / maxDragPx).coerceIn(0f, 1f)
+                        if (progress > maxProgress) maxProgress = progress
+                        currentDrag(progress)
+                        if (!change.pressed) {
+                            receivedUp = true
+                            change.consume()
+                            break
+                        }
+                        change.consume()
+                    }
                     currentPress(false)
-                    if (up != null) currentTrigger()
+                    currentDrag(0f)
+                    val slop = viewConfiguration.touchSlop
+                    val wasTap = abs(lastDx) <= slop && abs(lastDy) <= slop
+                    val completedUpwardDrag = maxProgress >= 0.12f && lastDy >= 0f
+                    if (receivedUp && !horizontalCancel && (wasTap || completedUpwardDrag)) currentTrigger()
                 }
             }
             .semantics(mergeDescendants = true) {

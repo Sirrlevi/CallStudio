@@ -1,8 +1,8 @@
-# CallStudio
+# Phone
 
-CallStudio is a native Android app (Kotlin, Jetpack Compose, Material 3) with two separate features: a **local, call-like experience** (custom callers, scheduled simulated incoming calls, themed screens and microphone recording) and an **outgoing SIM-call helper** that hands a number to Android's phone app and lets you choose a separate audio clip for that call.
+Phone is a native Android app (Kotlin, Jetpack Compose, Material 3) with two separate features: a **local, call-like experience** (custom callers, scheduled simulated incoming calls, themed screens and microphone recording) and an **outgoing SIM-call helper** that hands a number to Android's phone app and lets you choose a separate audio clip for that call.
 
-Outgoing SIM calls use the phone's cellular service and normal carrier billing. CallStudio does not route audio into the cellular uplink. The optional outgoing-call clip is played locally; the phone microphone may acoustically pick it up when speakerphone is enabled, but delivery to the other party is not guaranteed. There is no server, login or API key. Callers, schedules, settings, recordings and history stay on the device.
+Outgoing SIM calls use the phone's cellular service and normal carrier billing. Phone does not route audio into the cellular uplink. The optional outgoing-call clip is played locally; the phone microphone may acoustically pick it up when speakerphone is enabled, but delivery to the other party is not guaranteed. There is no server, login or API key. Callers, schedules, settings, recordings and history stay on the device.
 
 > **Build status:** this project was written without access to an Android SDK or the network, so it has **not been compiled or run yet**. The first GitHub Actions run is the first real build. See [Verification status](#verification-status).
 
@@ -16,7 +16,7 @@ Outgoing SIM calls use the phone's cellular service and normal carrier billing. 
 
 ## Turn on what the app needs
 
-Open CallStudio → **Settings → Permissions and setup**. It shows live status and a button for each item:
+Open Phone → **Settings → Permissions and setup**. It shows live status and a button for each item:
 
 | Item | Why | Where |
 | --- | --- | --- |
@@ -34,8 +34,9 @@ Contacts: asked only when you tap **Choose from contacts**. Android's picker doe
 - **Callers**: add from contacts (name, number and the contact's photo come in together) or create a custom caller. Photos are copied into app storage, so they keep working after restarts.
 - **Country code**: pick the country next to the number (flag and +code, searchable). The code is stored and shown separately, for example `+91 80590 56588`. Typing `+44 ...` or importing a contact with a `+` number sets the country automatically.
 - **Call now / delayed / at a time**: from Home, or the Schedule screen (seconds, minutes, or a date and time). Scheduled simulated calls are listed under **Scheduled**, where you can reschedule or cancel them.
-- **Outgoing SIM call**: from Home, open **Outgoing SIM call**, enter a number, optionally choose an audio clip for that call, then start the call through Android's phone app. After the other person answers, enable speakerphone, return to CallStudio and tap **Play clip on this phone**. The app requests the Phone permission only when you tap **Call using SIM**; declining it opens the system dialer instead.
-- **Themes**: seven complete themes (Pixel, One UI, iOS, Vivo, Truecaller style, Minimal dark, Minimal light) with different layouts, type and controls. The Truecaller style theme is an original blue caller-ID screen: staggered entrance, ripples around the photo, breathing rings on the buttons, and press-and-hold buttons that swell while the other fades (release to confirm, slide off to cancel). In call it has Mute, Keypad (plays real DTMF tones), Speaker, Hold (pauses the clip and recording), Message (opens your messaging app) and End. It doesn't use any third-party name or logo; the header reads "Caller ID". Pick one under **Settings → Call theme**; thumbnails are the real screens.
+- **Outgoing SIM call**: from Home, open **Outgoing SIM call**, enter a number, optionally choose an audio clip for that call, then start the call through Android's phone app. After the other person answers, enable speakerphone, return to Phone and tap **Play clip on this phone**. The app requests the Phone permission only when you tap **Call using SIM**; declining it opens the system dialer instead.
+- **Themes**: seven complete themes (Pixel, One UI, iOS, Vivo, Truecaller style, Minimal dark, Minimal light) with different layouts, type and controls. The Truecaller style theme is an original blue caller-ID screen: staggered entrance, ripples around the photo, breathing rings on the buttons, and press-and-hold buttons that swell while the other fades (release to confirm, swipe upward to grow the selected control, then release to confirm). In call it has Mute, Keypad (plays real DTMF tones), Speaker, Hold (pauses the clip and recording), Message (opens your messaging app) and End. The incoming and active screen header reads "Identified by truecaller"; the answer and decline controls respond to taps or an upward drag that grows only the selected button around its fixed centre. Pick one under **Settings → Call theme**; thumbnails are the real screens.
+- **Notification badge**: choose a green online dot or the Phone logo on the caller photo under Settings → Notifications. Android/OEM notification rendering can still vary by device.
 - **Audio**: ringtone (default, system sound, your own file, or none) and vibration live in Settings.
 - **Caller voice per call**: when you schedule a call you can optionally add an audio clip for that call only. Different calls can have different clips, and a call without one plays nothing. Settings only decides how a clip plays (once, repeat, or manual). The clip finishing never ends the call; only **End call** does.
 - **Recording**: tap **Record** in the call screen. Mute silences your microphone in the recording. Recordings are microphone-only 16-bit WAV files, listed under **Settings → Recordings**.

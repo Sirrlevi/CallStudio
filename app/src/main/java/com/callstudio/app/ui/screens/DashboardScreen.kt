@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -76,17 +77,29 @@ fun DashboardScreen(nav: NavController, vm: ScheduleViewModel = viewModel()) {
     val list = callers
 
     Scaffold(
-        topBar = { AppTopBar("CallStudio") },
+        topBar = { AppTopBar("Phone") },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { pad ->
         when {
             list == null -> Box(Modifier.padding(pad)) { LoadingBox() }
-            list.isEmpty() -> Box(Modifier.padding(pad)) {
-                EmptyState(
-                    Icons.Filled.Person, "Add your first caller",
-                    "Create a caller, then start or schedule a call.",
-                    "Add caller",
-                ) { nav.navigate(Routes.callerEdit(0)) }
+            list.isEmpty() -> Box(Modifier.padding(pad).fillMaxSize()) {
+                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        EmptyState(
+                            Icons.Filled.Person, "Add your first caller",
+                            "Create a caller to schedule simulated incoming calls. You can still place a normal outgoing SIM call without adding one.",
+                            "Add caller",
+                        ) { nav.navigate(Routes.callerEdit(0)) }
+                    }
+                    OutlinedButton(
+                        onClick = { nav.navigate(Routes.OUTGOING) },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                    ) {
+                        Icon(Icons.Filled.Call, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Outgoing SIM call")
+                    }
+                }
             }
             else -> {
                 val selected: CallerEntity = list.firstOrNull { it.id == settings.lastCallerId } ?: list.first()
