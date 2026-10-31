@@ -48,7 +48,20 @@ class CallersViewModel(app: Application) : AndroidViewModel(app) {
         val seen = mutableSetOf<String>()
         val now = System.currentTimeMillis()
         for (entry in entries) {
-            val parsed = PhoneNumbers.normalize(entry.numberForParsing, defaultIso)
+            val raw = entry.numberForParsing
+            val rawDigits = raw.filter(Char::isDigit)
+            val parsed = if (
+                defaultIso == "IN" &&
+                !raw.startsWith("+") &&
+                !raw.startsWith("00") &&
+                rawDigits.length == 12 &&
+                rawDigits.startsWith("91")
+            ) {
+                // A common Indian contact-book format stores 91 + 10 digits without the leading '+'.
+                PhoneNumbers.Parsed("IN", rawDigits.drop(2))
+            } else {
+                PhoneNumbers.normalize(raw, defaultIso)
+            }
             var national = parsed.national
             // Indian mobile/STD numbers sometimes arrive in local trunk form (0 + 10 digits).
             if (parsed.iso == "IN" && national.length == 11 && national.startsWith('0')) {
