@@ -9,8 +9,8 @@ permissions:
   contents: write   # lets the job publish the APK as a release asset
 
 concurrency:
-  group: android-ci-${{ github.run_id }}
-  cancel-in-progress: false
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
