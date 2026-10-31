@@ -107,7 +107,7 @@ class NotificationHelper(private val context: Context, private val photos: Photo
         // Android's native CallStyle renders the person photo on the left and places the
         // Phone app icon on its lower-right corner, matching the standard ongoing-call card.
         return NotificationCompat.Builder(context, CHANNEL_ONGOING)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(if (badgeStyle == NotificationBadgeStyle.ONLINE_DOT) R.drawable.ic_notification_clear else R.drawable.ic_notification)
             .setContentTitle(s.displayName)
             .setContentText(if (recording) "Ongoing call · Recording" else "Ongoing call")
             .setCategory(NotificationCompat.CATEGORY_CALL)
@@ -123,7 +123,7 @@ class NotificationHelper(private val context: Context, private val photos: Photo
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setStyle(NotificationCompat.CallStyle.forOngoingCall(person, hangUp))
             .addAction(
-                R.drawable.ic_action_mute,
+                if (s.muted) R.drawable.ic_action_unmute else R.drawable.ic_action_mute,
                 if (s.muted) "Unmute" else "Mute",
                 mute,
             )
