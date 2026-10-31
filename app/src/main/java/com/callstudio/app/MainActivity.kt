@@ -67,7 +67,7 @@ class MainActivity : ComponentActivity() {
                                         Text("Downloading update…", modifier = Modifier.padding(top = 8.dp))
                                     }
                                     updateError.value?.let {
-                                        Text(it, modifier = Modifier.padding(top = androidx.compose.ui.unit.dp(8)))
+                                        Text(it, modifier = Modifier.padding(top = 8.dp))
                                     }
                                 }
                             },
