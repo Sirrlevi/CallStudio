@@ -33,6 +33,39 @@ class CallerRepository(
         }
     }
 
+    /**
+     * Adds phonebook entries without duplicating numbers already saved in Phone.
+     * Existing caller names/photos are never overwritten by an automatic sync.
+     */
+    suspend fun importContacts(imported: List<CallerEntity>): Int {
+        val existing = dao.getAll()
+        val exactKeys = existing.mapTo(mutableSetOf()) { key(it.countryIso, it.phone) }
+        val legacyDigits = existing.filter { it.countryIso.isBlank() }
+            .mapTo(mutableSetOf()) { it.phone.filter(Char::isDigit) }
+        val seen = mutableSetOf<String>()
+        var added = 0
+        for (candidate in imported) {
+            val digits = candidate.phone.filter(Char::isDigit)
+            if (digits.isBlank()) {
+                photos.delete(candidate.photoFile)
+                continue
+            }
+            val normalizedKey = key(candidate.countryIso, digits)
+            val duplicate = !seen.add(normalizedKey) || normalizedKey in exactKeys || digits in legacyDigits
+            if (duplicate) {
+                photos.delete(candidate.photoFile)
+                continue
+            }
+            dao.insert(candidate.copy(phone = digits))
+            exactKeys += normalizedKey
+            added++
+        }
+        return added
+    }
+
+    private fun key(iso: String, phone: String): String =
+        "${iso.uppercase()}:${phone.filter(Char::isDigit)}"
+
     /** Deleting a caller also cancels the calls still scheduled for them. */
     suspend fun delete(caller: CallerEntity) {
         coordinator.cancelForCaller(caller.id)
