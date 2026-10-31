@@ -43,6 +43,7 @@ class CallersViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun importAllContacts(): ContactImportSummary {
         val app = getApplication<Application>()
         val defaultIso = withContext(Dispatchers.IO) { ContactsHelper.defaultCountryIso(app) }
+        c.callers.fillMissingLocalCountry(defaultIso)
         val entries = withContext(Dispatchers.IO) { ContactsHelper.readAll(app) }
         val candidates = ArrayList<CallerEntity>()
         val seen = mutableSetOf<String>()
