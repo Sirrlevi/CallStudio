@@ -97,7 +97,7 @@ class NotificationHelper(private val context: Context, private val photos: Photo
         val mute = broadcastIntent(s.eventId, ACTION_TOGGLE_MUTE, RequestCodes.MUTE)
         val recording = s.recording.isActive
         val badgeStyle = readBadgeStyle()
-        val portrait = avatar(s.callerPhotoFile, badgeStyle)
+        val portrait = avatar(s.callerPhotoFile, badgeStyle, useSystemAppBadge = true)
         val person = Person.Builder()
             .setName(s.displayName.ifBlank { "Unknown" })
             .setImportant(true)
@@ -176,7 +176,7 @@ class NotificationHelper(private val context: Context, private val photos: Photo
     }
 
     /** Makes a true circular contact portrait and composites the user's chosen badge into it. */
-    private fun avatar(name: String?, badgeStyle: NotificationBadgeStyle): Bitmap? {
+    private fun avatar(name: String?, badgeStyle: NotificationBadgeStyle, useSystemAppBadge: Boolean = false): Bitmap? {
         val file = photos.file(name) ?: return null
         return try {
             val source = BitmapFactory.decodeFile(file.path) ?: return null
@@ -211,7 +211,7 @@ class NotificationHelper(private val context: Context, private val photos: Photo
                     badgePaint.color = AndroidColor.rgb(46, 204, 96)
                     canvas.drawCircle(cx, cy, radius, badgePaint)
                 }
-                NotificationBadgeStyle.APP_LOGO -> {
+                NotificationBadgeStyle.APP_LOGO -> if (!useSystemAppBadge) {
                     badgePaint.color = AndroidColor.rgb(26, 115, 232)
                     canvas.drawCircle(cx, cy, radius, badgePaint)
                     val phone = Path().apply {
