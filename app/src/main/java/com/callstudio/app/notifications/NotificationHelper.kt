@@ -93,11 +93,28 @@ class NotificationHelper(private val context: Context, private val photos: Photo
         val hangUp = broadcastIntent(s.eventId, ACTION_END, RequestCodes.HANG_UP)
         val mute = broadcastIntent(s.eventId, ACTION_TOGGLE_MUTE, RequestCodes.MUTE)
         val recording = s.recording.isActive
-        return NotificationCompat.Builder(context, CHANNEL_ONGOING)
+        val badgeStyle = runCatching {
+            val raw = context.getSharedPreferences(SettingsStore.NOTIFICATION_PREF_FILE, Context.MODE_PRIVATE)
+                .getString(SettingsStore.NOTIFICATION_PREF_KEY, NotificationBadgeStyle.APP_LOGO.name)
+            NotificationBadgeStyle.valueOf(raw ?: NotificationBadgeStyle.APP_LOGO.name)
+        }.getOrDefault(NotificationBadgeStyle.APP_LOGO)
+
+        // Use a regular ongoing notification instead of CallStyle here. Android's CallStyle
+        // forcibly overlays the app/system icon on the caller portrait. Our portrait already
+        // contains the user's chosen single badge (green dot or Phone logo), so CallStyle
+        // produced two overlapping badges on several OEM skins.
+        val callerPortrait = avatar(s.callerPhotoFile, badgeStyle)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ONGOING)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(s.displayName)
             .setContentText(if (recording) "Ongoing call · Recording" else "Ongoing call")
+            .setStyle(
+                NotificationCompat.BigTextStyle().bigText(
+                    if (recording) "Ongoing call · Recording" else "Ongoing call"
+                )
+            )
             .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setUsesChronometer(true)
@@ -105,9 +122,11 @@ class NotificationHelper(private val context: Context, private val photos: Photo
             .setWhen(s.answeredAtMillis)
             .setContentIntent(activityIntent(s.eventId, answer = false))
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setStyle(NotificationCompat.CallStyle.forOngoingCall(person(s), hangUp))
+            .addAction(0, "Hang up", hangUp)
             .addAction(0, if (s.muted) "Unmute" else "Mute", mute)
-            .build()
+
+        if (callerPortrait != null) builder.setLargeIcon(callerPortrait)
+        return builder.build()
     }
 
     /** Placeholder used only to satisfy the foreground-service contract when the call is already over. */
