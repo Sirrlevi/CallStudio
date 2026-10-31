@@ -149,6 +149,14 @@ fun DashboardScreen(nav: NavController, vm: ScheduleViewModel = viewModel()) {
                         Spacer(Modifier.width(8.dp))
                         Text("Call now")
                     }
+                    OutlinedButton(
+                        onClick = { nav.navigate(Routes.OUTGOING) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Filled.Call, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Outgoing SIM call")
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedButton(
                             onClick = { nav.navigate(Routes.schedule(selected.id, mode = 1)) },

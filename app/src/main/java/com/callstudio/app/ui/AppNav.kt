@@ -29,6 +29,7 @@ import com.callstudio.app.ui.screens.CallersScreen
 import com.callstudio.app.ui.screens.DashboardScreen
 import com.callstudio.app.ui.screens.HistoryScreen
 import com.callstudio.app.ui.screens.PreviewScreen
+import com.callstudio.app.ui.screens.OutgoingCallScreen
 import com.callstudio.app.ui.screens.RecordingsScreen
 import com.callstudio.app.ui.screens.ScheduleScreen
 import com.callstudio.app.ui.screens.ScheduledScreen
@@ -49,6 +50,7 @@ object Routes {
     const val CALLER_EDIT = "caller/{id}"
     const val SCHEDULE = "schedule?callerId={callerId}&eventId={eventId}&mode={mode}"
     const val PREVIEW = "preview/{callerId}"
+    const val OUTGOING = "outgoing"
 
     fun callerEdit(id: Long) = "caller/$id"
     fun schedule(callerId: Long = -1L, eventId: Long = -1L, mode: Int = 1) =
@@ -108,6 +110,7 @@ fun AppNav() {
             composable(Routes.AUDIO) { AudioSettingsScreen(nav) }
             composable(Routes.RECORDINGS) { RecordingsScreen(nav) }
             composable(Routes.HISTORY) { HistoryScreen(nav) }
+            composable(Routes.OUTGOING) { OutgoingCallScreen(nav) }
             composable(Routes.SETUP) { SetupScreen(nav) }
             composable(
                 Routes.CALLER_EDIT,
