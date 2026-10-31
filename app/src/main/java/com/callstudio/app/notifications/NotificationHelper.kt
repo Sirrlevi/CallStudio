@@ -19,6 +19,8 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.app.Person
+import androidx.core.graphics.drawable.IconCompat
 import com.callstudio.app.CallActivity
 import com.callstudio.app.R
 import com.callstudio.app.data.PhotoStore
@@ -64,11 +66,7 @@ class NotificationHelper(private val context: Context, private val photos: Photo
         val open = activityIntent(s.eventId, answer = false)
         val answer = activityIntent(s.eventId, answer = true)
         val decline = broadcastIntent(s.eventId, ACTION_DECLINE, RequestCodes.DECLINE)
-        val badgeStyle = runCatching {
-            val raw = context.getSharedPreferences(SettingsStore.NOTIFICATION_PREF_FILE, Context.MODE_PRIVATE)
-                .getString(SettingsStore.NOTIFICATION_PREF_KEY, NotificationBadgeStyle.APP_LOGO.name)
-            NotificationBadgeStyle.valueOf(raw ?: NotificationBadgeStyle.APP_LOGO.name)
-        }.getOrDefault(NotificationBadgeStyle.APP_LOGO)
+        val badgeStyle = readBadgeStyle()
         val callerPortrait = avatar(s.callerPhotoFile, badgeStyle)
         val b = NotificationCompat.Builder(context, if (backup) CHANNEL_BACKUP else CHANNEL_INCOMING)
             .setSmallIcon(R.drawable.ic_notification)
@@ -98,27 +96,23 @@ class NotificationHelper(private val context: Context, private val photos: Photo
         val hangUp = broadcastIntent(s.eventId, ACTION_END, RequestCodes.HANG_UP)
         val mute = broadcastIntent(s.eventId, ACTION_TOGGLE_MUTE, RequestCodes.MUTE)
         val recording = s.recording.isActive
-        val badgeStyle = runCatching {
-            val raw = context.getSharedPreferences(SettingsStore.NOTIFICATION_PREF_FILE, Context.MODE_PRIVATE)
-                .getString(SettingsStore.NOTIFICATION_PREF_KEY, NotificationBadgeStyle.APP_LOGO.name)
-            NotificationBadgeStyle.valueOf(raw ?: NotificationBadgeStyle.APP_LOGO.name)
-        }.getOrDefault(NotificationBadgeStyle.APP_LOGO)
+        val badgeStyle = readBadgeStyle()
+        val portrait = avatar(s.callerPhotoFile, badgeStyle)
+        val person = Person.Builder()
+            .setName(s.displayName.ifBlank { "Unknown" })
+            .setImportant(true)
+            .apply { portrait?.let { setIcon(IconCompat.createWithBitmap(it)) } }
+            .build()
 
-        // Use a regular ongoing notification instead of CallStyle here. Android's CallStyle
-        // forcibly overlays the app/system icon on the caller portrait. Our portrait already
-        // contains the user's chosen single badge (green dot or Phone logo), so CallStyle
-        // produced two overlapping badges on several OEM skins.
-        val callerPortrait = avatar(s.callerPhotoFile, badgeStyle)
-        val builder = NotificationCompat.Builder(context, CHANNEL_ONGOING)
+        // Android's native CallStyle renders the person photo on the left and places the
+        // Phone app icon on its lower-right corner, matching the standard ongoing-call card.
+        return NotificationCompat.Builder(context, CHANNEL_ONGOING)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(s.displayName)
             .setContentText(if (recording) "Ongoing call · Recording" else "Ongoing call")
-            .setStyle(
-                NotificationCompat.BigTextStyle().bigText(
-                    if (recording) "Ongoing call · Recording" else "Ongoing call"
-                )
-            )
             .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setColor(AndroidColor.rgb(0, 82, 88))
+            .setColorized(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -127,12 +121,20 @@ class NotificationHelper(private val context: Context, private val photos: Photo
             .setWhen(s.answeredAtMillis)
             .setContentIntent(activityIntent(s.eventId, answer = false))
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .addAction(0, "Hang up", hangUp)
-            .addAction(0, if (s.muted) "Unmute" else "Mute", mute)
-
-        if (callerPortrait != null) builder.setLargeIcon(callerPortrait)
-        return builder.build()
+            .setStyle(NotificationCompat.CallStyle.forOngoingCall(person, hangUp))
+            .addAction(
+                R.drawable.ic_action_mute,
+                if (s.muted) "Unmute" else "Mute",
+                mute,
+            )
+            .build()
     }
+
+    private fun readBadgeStyle(): NotificationBadgeStyle = runCatching {
+        val raw = context.getSharedPreferences(SettingsStore.NOTIFICATION_PREF_FILE, Context.MODE_PRIVATE)
+            .getString(SettingsStore.NOTIFICATION_PREF_KEY, NotificationBadgeStyle.APP_LOGO.name)
+        NotificationBadgeStyle.valueOf(raw ?: NotificationBadgeStyle.APP_LOGO.name)
+    }.getOrDefault(NotificationBadgeStyle.APP_LOGO)
 
     /** Placeholder used only to satisfy the foreground-service contract when the call is already over. */
     fun buildEnded(): Notification =
