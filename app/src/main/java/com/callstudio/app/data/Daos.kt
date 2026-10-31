@@ -15,7 +15,7 @@ interface CallerDao {
     suspend fun get(id: Long): CallerEntity?
 
     @Query("SELECT * FROM callers")
-    suspend fun getAll(): List<CallerEntity>?
+    suspend fun getAll(): List<CallerEntity>
 
     @Query("SELECT * FROM callers ORDER BY lastUsedAt DESC, id LIMIT 1")
     suspend fun mostRecentlyUsed(): CallerEntity?
