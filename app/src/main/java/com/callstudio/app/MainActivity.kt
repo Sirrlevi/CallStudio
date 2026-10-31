@@ -180,7 +180,7 @@ class MainActivity : ComponentActivity() {
         runCatching {
             val uri = FileProvider.getUriForFile(this, "$packageName.updateprovider", apk)
             val install = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
-                data = uri
+                setDataAndType(uri, "application/vnd.android.package-archive")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 putExtra(Intent.EXTRA_RETURN_RESULT, true)
             }
