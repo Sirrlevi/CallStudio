@@ -13,12 +13,28 @@ android {
         applicationId = "com.callstudio.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val stablePhoneKey = file("${System.getProperty("user.home")}/.android/phone-debug.keystore")
+
+    signingConfigs {
+        create("phoneStableDebug") {
+            storeFile = stablePhoneKey
+            storePassword = "phone-debug-v1"
+            keyAlias = "phone"
+            keyPassword = "phone-debug-v1"
+        }
+    }
+
     buildTypes {
+        debug {
+            // CI restores this key from the private debug-latest release so every future
+            // APK has the same certificate and can update the installed app in place.
+            if (stablePhoneKey.exists()) signingConfig = signingConfigs.getByName("phoneStableDebug")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
