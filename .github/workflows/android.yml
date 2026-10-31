@@ -77,8 +77,22 @@ jobs:
           echo "Found $APK"
           echo "path=$APK" >> "$GITHUB_OUTPUT"
 
+      - name: Confirm this is the latest master commit
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LATEST_SHA=$(gh api repos/Sirrlevi/CallStudio/branches/master --jq '.commit.sha')
+          if [ "$LATEST_SHA" = "$GITHUB_SHA" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "This run is stale; it will not replace the latest Phone APK."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # Release assets do not count against the Actions artifact storage quota.
       - name: Publish Phone APK and update manifest
+        if: steps.latest.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
