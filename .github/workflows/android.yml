@@ -85,8 +85,8 @@ jobs:
           cp "${{ steps.apk.outputs.path }}" Phone-debug.apk
           cp "$HOME/.android/phone-debug.keystore" Phone-signing.keystore
           TAG=debug-latest
-          VERSION_CODE=$(sed -n 's/^[[:space:]]*versionCode = \\([0-9][0-9]*\\).*/\\1/p' app/build.gradle.kts | head -n 1)
-          VERSION_NAME=$(sed -n 's/^[[:space:]]*versionName = "\\(.*\\)".*/\\1/p' app/build.gradle.kts | head -n 1)
+          VERSION_CODE=$(grep -Eo 'versionCode = [0-9]+' app/build.gradle.kts | head -n 1 | awk '{print $3}')
+          VERSION_NAME=$(grep -Eo 'versionName = "[^"]+"' app/build.gradle.kts | head -n 1 | cut -d '"' -f 2)
           APK_SHA256=$(sha256sum Phone-debug.apk | awk '{print $1}')
           if [ -z "$VERSION_CODE" ] || [ -z "$VERSION_NAME" ] || [ -z "$APK_SHA256" ]; then
             echo "Could not create Phone update metadata." >&2
