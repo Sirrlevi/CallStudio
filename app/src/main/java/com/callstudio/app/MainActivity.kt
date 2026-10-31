@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.callstudio.app.ui.AppNav
@@ -62,8 +63,8 @@ class MainActivity : ComponentActivity() {
                                 Column {
                                     Text("Phone ${available.versionName} is ready. Download and install the latest version?")
                                     if (updateBusy.value) {
-                                        LinearProgressIndicator(Modifier.padding(top = androidx.compose.ui.unit.dp(12)))
-                                        Text("Downloading update…", modifier = Modifier.padding(top = androidx.compose.ui.unit.dp(8)))
+                                        LinearProgressIndicator(Modifier.padding(top = 12.dp))
+                                        Text("Downloading update…", modifier = Modifier.padding(top = 8.dp))
                                     }
                                     updateError.value?.let {
                                         Text(it, modifier = Modifier.padding(top = androidx.compose.ui.unit.dp(8)))
