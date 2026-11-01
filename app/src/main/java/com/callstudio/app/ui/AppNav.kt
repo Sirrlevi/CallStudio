@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.CallMade
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -28,8 +29,9 @@ import com.callstudio.app.ui.screens.CallerEditScreen
 import com.callstudio.app.ui.screens.CallersScreen
 import com.callstudio.app.ui.screens.DashboardScreen
 import com.callstudio.app.ui.screens.HistoryScreen
+import com.callstudio.app.ui.screens.OutgoingScreen
+import com.callstudio.app.ui.screens.OutgoingSetupScreen
 import com.callstudio.app.ui.screens.PreviewScreen
-import com.callstudio.app.ui.screens.OutgoingCallScreen
 import com.callstudio.app.ui.screens.RecordingsScreen
 import com.callstudio.app.ui.screens.ScheduleScreen
 import com.callstudio.app.ui.screens.ScheduledScreen
@@ -47,10 +49,11 @@ object Routes {
     const val RECORDINGS = "recordings"
     const val HISTORY = "history"
     const val SETUP = "setup"
+    const val OUTGOING = "outgoing"
+    const val OUTGOING_SETUP = "outgoing_setup"
     const val CALLER_EDIT = "caller/{id}"
     const val SCHEDULE = "schedule?callerId={callerId}&eventId={eventId}&mode={mode}"
     const val PREVIEW = "preview/{callerId}"
-    const val OUTGOING = "outgoing"
 
     fun callerEdit(id: Long) = "caller/$id"
     fun schedule(callerId: Long = -1L, eventId: Long = -1L, mode: Int = 1) =
@@ -64,6 +67,7 @@ private val barItems = listOf(
     BarItem(Routes.DASHBOARD, "Home", Icons.Filled.Home),
     BarItem(Routes.CALLERS, "Callers", Icons.Filled.Contacts),
     BarItem(Routes.SCHEDULED, "Scheduled", Icons.Filled.Alarm),
+    BarItem(Routes.OUTGOING, "Outgoing", Icons.Filled.CallMade),
     BarItem(Routes.SETTINGS, "Settings", Icons.Filled.Settings),
 )
 
@@ -106,11 +110,12 @@ fun AppNav() {
             composable(Routes.CALLERS) { CallersScreen(nav) }
             composable(Routes.SCHEDULED) { ScheduledScreen(nav) }
             composable(Routes.SETTINGS) { SettingsScreen(nav) }
+            composable(Routes.OUTGOING) { OutgoingScreen(nav) }
+            composable(Routes.OUTGOING_SETUP) { OutgoingSetupScreen(nav) }
             composable(Routes.THEMES) { ThemeScreen(nav) }
             composable(Routes.AUDIO) { AudioSettingsScreen(nav) }
             composable(Routes.RECORDINGS) { RecordingsScreen(nav) }
             composable(Routes.HISTORY) { HistoryScreen(nav) }
-            composable(Routes.OUTGOING) { OutgoingCallScreen(nav) }
             composable(Routes.SETUP) { SetupScreen(nav) }
             composable(
                 Routes.CALLER_EDIT,

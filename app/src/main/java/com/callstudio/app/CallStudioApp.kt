@@ -13,6 +13,7 @@ import com.callstudio.app.data.CallerRepository
 import com.callstudio.app.data.PhotoStore
 import com.callstudio.app.data.RecordingRepository
 import com.callstudio.app.notifications.NotificationHelper
+import com.callstudio.app.outgoing.OutgoingSettingsStore
 import com.callstudio.app.preferences.SettingsStore
 import com.callstudio.app.scheduling.AndroidAlarmBackend
 import com.callstudio.app.scheduling.ScheduleCoordinator
@@ -41,6 +42,7 @@ class AppContainer(app: Application) {
         .build()
     val settings = SettingsStore(app)
     val photos = PhotoStore(app)
+    val outgoingSettings = OutgoingSettingsStore(app)
     val notifications = NotificationHelper(app, photos)
     val voiceLeases = VoiceLeases(
         calls = db.callDao(),

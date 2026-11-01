@@ -1,8 +1,8 @@
-# Phone
+# CallStudio
 
-Phone is a native Android app (Kotlin, Jetpack Compose, Material 3) with two separate features: a **local, call-like experience** (custom callers, scheduled simulated incoming calls, themed screens and microphone recording) and an **outgoing SIM-call helper** that hands a number to Android's phone app and lets you choose a separate audio clip for that call.
+CallStudio is a native Android app (Kotlin, Jetpack Compose, Material 3) that creates a **local, call-like experience on your own phone**: custom callers, scheduled "incoming calls", themed ringing and in-call screens, a caller voice clip played on the device, and optional microphone recording.
 
-Outgoing SIM calls use the phone's cellular service and normal carrier billing. Phone does not route audio into the cellular uplink. The optional outgoing-call clip is played locally; the phone microphone may acoustically pick it up when speakerphone is enabled, but delivery to the other party is not guaranteed. There is no server, login or API key. Callers, schedules, settings, recordings and history stay on the device.
+It does **not** place real calls, contact anyone, or send audio anywhere. There is no server, login or API key. Callers, schedules, settings, recordings and history stay on the device.
 
 > **Build status:** this project was written without access to an Android SDK or the network, so it has **not been compiled or run yet**. The first GitHub Actions run is the first real build. See [Verification status](#verification-status).
 
@@ -16,15 +16,14 @@ Outgoing SIM calls use the phone's cellular service and normal carrier billing. 
 
 ## Turn on what the app needs
 
-Open Phone → **Settings → Permissions and setup**. It shows live status and a button for each item:
+Open CallStudio → **Settings → Permissions and setup**. It shows live status and a button for each item:
 
 | Item | Why | Where |
 | --- | --- | --- |
 | Notifications | Calls arrive as notifications (Android 13+ asks at runtime). | Allow notifications |
 | Full-screen call screen | Lets a call take over the screen, including when locked (Android 14+ special access). Without it the call is a banner you tap. | Open settings → allow "full-screen notifications" |
 | Exact timing | Calls ring at the chosen second (Android 12+ special access). Without it Android may deliver a call a few minutes late, and the app says so. | Open settings → allow "alarms & reminders" |
-| Microphone | Only when you tap **Record** during a simulated call. Nothing records on its own. | Asked at that moment |
-| Phone | Only when you tap **Call using SIM** for an outgoing cellular call. If declined, the system dialer opens instead. | Asked at that moment |
+| Microphone | Only when you tap **Record** during a call. Nothing records on its own. | Asked at that moment |
 | Contacts | Only to copy the photo of the contact you choose. | Asked when you tap Choose from contacts |
 
 Contacts: asked only when you tap **Choose from contacts**. Android's picker doesn't share the contact's photo by itself, so the permission is used only to copy the photo of the contact you pick. If you say no, the name and number still import and you can choose a photo yourself.
@@ -33,13 +32,31 @@ Contacts: asked only when you tap **Choose from contacts**. Android's picker doe
 
 - **Callers**: add from contacts (name, number and the contact's photo come in together) or create a custom caller. Photos are copied into app storage, so they keep working after restarts.
 - **Country code**: pick the country next to the number (flag and +code, searchable). The code is stored and shown separately, for example `+91 80590 56588`. Typing `+44 ...` or importing a contact with a `+` number sets the country automatically.
-- **Call now / delayed / at a time**: from Home, or the Schedule screen (seconds, minutes, or a date and time). Scheduled simulated calls are listed under **Scheduled**, where you can reschedule or cancel them.
-- **Outgoing SIM call**: from Home, open **Outgoing SIM call**, enter a number, optionally choose an audio clip for that call, then start the call through Android's phone app. After the other person answers, enable speakerphone, return to Phone and tap **Play clip on this phone**. The app requests the Phone permission only when you tap **Call using SIM**; declining it opens the system dialer instead.
-- **Themes**: seven complete themes (Pixel, One UI, iOS, Vivo, Truecaller style, Minimal dark, Minimal light) with different layouts, type and controls. The Truecaller style theme is an original blue caller-ID screen: staggered entrance, ripples around the photo, breathing rings on the buttons, and press-and-hold buttons that swell while the other fades (release to confirm, swipe upward to grow the selected control, then release to confirm). In call it has Mute, Keypad (plays real DTMF tones), Speaker, Hold (pauses the clip and recording), Message (opens your messaging app) and End. The incoming and active screen header reads "Identified by truecaller"; the answer and decline controls respond to taps or an upward drag that grows only the selected button around its fixed centre. Pick one under **Settings → Call theme**; thumbnails are the real screens.
-- **Notification badge**: choose a green online dot or the Phone logo on the caller photo under Settings → Notifications. Android/OEM notification rendering can still vary by device.
+- **Call now / delayed / at a time**: from Home, or the Schedule screen (seconds, minutes, or a date and time). Scheduled calls are listed under **Scheduled**, where you can reschedule or cancel them.
+- **Themes**: seven complete themes (Pixel, One UI, iOS, Vivo, Truecaller style, Minimal dark, Minimal light) with different layouts, type and controls. The Truecaller style theme is an original blue caller-ID screen: staggered entrance, ripples around the photo, breathing rings on the buttons, and press-and-hold buttons that swell while the other fades (release to confirm, slide off to cancel). In call it has Mute, Keypad (plays real DTMF tones), Speaker, Hold (pauses the clip and recording), Message (opens your messaging app) and End. It doesn't use any third-party name or logo; the header reads "Caller ID". Pick one under **Settings → Call theme**; thumbnails are the real screens.
 - **Audio**: ringtone (default, system sound, your own file, or none) and vibration live in Settings.
 - **Caller voice per call**: when you schedule a call you can optionally add an audio clip for that call only. Different calls can have different clips, and a call without one plays nothing. Settings only decides how a clip plays (once, repeat, or manual). The clip finishing never ends the call; only **End call** does.
 - **Recording**: tap **Record** in the call screen. Mute silences your microphone in the recording. Recordings are microphone-only 16-bit WAV files, listed under **Settings → Recordings**.
+
+## Outgoing tab (real calls, optional)
+
+Fake incoming calls stay fully local. The **Outgoing** tab is separate and does use the internet.
+
+1. Enter a number (country picker) or choose a contact.
+2. Add one or more clips (audio files from this phone, or links) and put them in order.
+3. Optionally switch on **Join the call yourself afterwards**.
+4. Tap **Call**, then confirm the person has agreed to get a call with recorded audio.
+
+What actually happens: the app asks **Twilio** (your own account) to call the number from your **Twilio number**. When the person answers, Twilio plays the clips one after another. After the last clip it hangs up, or, if you chose to join, it rings your own phone and connects you to the person. The app shows ringing / answered / ended status and has an **End call** button.
+
+Why it works this way:
+- Android doesn't let an app put audio into a normal SIM call or even tell it when the other side answered, so the call is placed from Twilio's cloud, not from your SIM.
+- Twilio plays audio from a web link. Files from this phone are uploaded to your own free Cloudinary account (unsigned upload preset) and are reachable by anyone who has the link. You can add clips as links instead and skip Cloudinary.
+- Your phone's microphone can't be streamed into that call, so "live" means Twilio calls **your** phone and bridges you in.
+
+Setup is under **Outgoing → gear icon**: Twilio Account SID, Auth Token (stored encrypted with the Android Keystore), your Twilio number, your own number (for joining live), and the optional Cloudinary cloud name and preset. Twilio trial accounts can only call numbers verified in the Twilio console, calls are charged by Twilio, and some countries restrict recorded or automated calls. The caller ID is always your Twilio number; the app can't change it.
+
+Not verified: this was written without network access, so nothing was tested against Twilio or Cloudinary.
 
 ## Build locally
 
@@ -68,10 +85,10 @@ Instrumentation tests (`app/src/androidTest`) need a device or emulator: `gradle
 ## Limits you should know about
 
 - Android and OEM skins differ. Some devices hide full-screen calls or restrict background audio; the app falls back to a normal notification and shows what is missing in Setup.
-- The app respects silent mode and Do Not Disturb for its simulated calls; it does not bypass them.
+- The app respects silent mode and Do Not Disturb; it does not bypass them.
 - Force-stopping the app cancels its alarms. Opening the app once re-arms them.
 - Calls that fall due while the phone is off ring on boot only if they are less than 2 minutes overdue; otherwise they are recorded as missed.
-- Recording captures the microphone only. It does not capture a phone line or other apps. If an outgoing-call clip plays on speaker, the microphone may pick it up acoustically, but this is device-dependent and not a supported way to inject audio into the SIM call.
+- Recording captures the microphone only. It does not capture a phone line or other apps. If the caller clip plays on speaker, the microphone may pick it up acoustically.
 - If Android refuses to start the background service (for example on some Android 15 boot paths), ringing falls back to a notification with the system ringtone.
 - Mute affects microphone recording. When nothing is recording it only remembers the setting and says so.
 
@@ -81,6 +98,6 @@ Instrumentation tests (`app/src/androidTest`) need a device or emulator: `gradle
 | --- | --- |
 | Source written, unit and instrumentation tests written (including country codes, per-call clips, migration columns) | Done |
 | Database migration 1 → 2 | Written, **not tested** on a real upgrade |
+| Outgoing tab (Twilio, upload, status polling) | Written, **never run against the real services** |
 | Gradle build, unit tests, `assembleDebug` | **Not run** (no SDK or network where this was written). Run in GitHub Actions. |
-| Outgoing SIM-call helper and per-call audio selection | Written, **not compiled or tested on a device**; remote playback is not guaranteed by Android |
 | Behaviour on a phone or emulator (ringing, lock-screen, audio routing, recording, notifications) | **Not verified** |

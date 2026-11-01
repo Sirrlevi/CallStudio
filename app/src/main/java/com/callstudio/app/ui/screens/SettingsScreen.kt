@@ -45,7 +45,6 @@ import com.callstudio.app.ui.Routes
 import com.callstudio.app.ui.components.AppTopBar
 import com.callstudio.app.ui.components.SectionTitle
 import com.callstudio.app.ui.viewmodels.SettingsViewModel
-import com.callstudio.app.preferences.NotificationBadgeStyle
 
 @Composable
 fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
@@ -79,29 +78,6 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
                 trailingContent = { Switch(checked = st.keepScreenOn, onCheckedChange = { vm.setKeepScreenOn(it) }) },
             )
 
-            SectionTitle("Notifications")
-            ListItem(
-                headlineContent = { Text("Caller photo badge") },
-                supportingContent = {
-                    Column {
-                        Text("Choose the small badge shown on the caller photo in call notifications.")
-                        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                            val choices = listOf(
-                                NotificationBadgeStyle.ONLINE_DOT to "Green dot",
-                                NotificationBadgeStyle.APP_LOGO to "Phone logo",
-                            )
-                            choices.forEachIndexed { i, (style, label) ->
-                                SegmentedButton(
-                                    selected = st.notificationBadgeStyle == style,
-                                    onClick = { vm.setNotificationBadgeStyle(style) },
-                                    shape = SegmentedButtonDefaults.itemShape(i, choices.size),
-                                ) { Text(label, maxLines = 1) }
-                            }
-                        }
-                    }
-                },
-            )
-
             SectionTitle("Recording")
             ListItem(
                 headlineContent = { Text("Recording quality") },
@@ -128,8 +104,8 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
 
             SectionTitle("About")
             Text(
-                "Phone can simulate scheduled incoming calls and can also place outgoing cellular calls through your SIM. " +
-                    "Audio clips selected for outgoing calls play on this device only; Android does not expose direct SIM-call audio injection.",
+                "CallStudio creates a call-like experience on this phone only. It doesn't place real calls or contact anyone. " +
+                    "Callers, schedules, recordings and history stay on this device.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),

@@ -11,7 +11,6 @@ import com.callstudio.app.audio.AudioFiles
 import com.callstudio.app.audio.RingtonePlayer
 import com.callstudio.app.container
 import com.callstudio.app.preferences.AppSettings
-import com.callstudio.app.preferences.NotificationBadgeStyle
 import com.callstudio.app.preferences.RingtoneSource
 import com.callstudio.app.preferences.VoicePlayMode
 import com.callstudio.app.ui.theme.CallTheme
@@ -46,7 +45,6 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setKeepScreenOn(on: Boolean) { viewModelScope.launch { c.settings.setKeepScreenOn(on) } }
     fun setRingTimeout(seconds: Int) { viewModelScope.launch { c.settings.setRingTimeout(seconds) } }
     fun setSampleRate(hz: Int) { viewModelScope.launch { c.settings.setRecordingSampleRate(hz) } }
-    fun setNotificationBadgeStyle(style: NotificationBadgeStyle) { viewModelScope.launch { c.settings.setNotificationBadgeStyle(style) } }
 
     // ---- ringtone ----------------------------------------------------------------------------------------
 

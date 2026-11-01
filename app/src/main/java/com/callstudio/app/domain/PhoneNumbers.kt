@@ -42,6 +42,23 @@ object PhoneNumbers {
         else -> "${Countries.dialLabelOf(iso)} ${group(national, iso)}"
     }
 
+    private val e164Pattern = Regex("^\\+[1-9]\\d{6,14}$")
+
+    fun isE164(value: String): Boolean = e164Pattern.matches(value.trim())
+
+    /**
+     * "+<calling code><number>" for dialing through a provider, or null when the number is too short to be a
+     * real number (this also keeps short and emergency codes out). One leading trunk "0" is dropped.
+     */
+    fun e164(iso: String, national: String): String? {
+        val country = Countries.get(iso) ?: return null
+        val digits = national.filter { it.isDigit() }
+        val trimmed = if (digits.startsWith("0") && iso != "IT") digits.drop(1) else digits
+        if (trimmed.length < 6) return null
+        val result = "+${country.dial}$trimmed"
+        return if (isE164(result)) result else null
+    }
+
     /** Digits with a leading + for messaging apps. */
     fun dialable(displayNumber: String): String = displayNumber.filter { it.isDigit() || it == '+' }
 }

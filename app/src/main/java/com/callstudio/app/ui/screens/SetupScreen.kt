@@ -104,6 +104,11 @@ fun SetupScreen(nav: NavController) {
                 Status.INFO,
             ),
             SetupItem(
+                "Internet (Outgoing tab only)",
+                "Fake incoming calls never use the internet. Only the Outgoing tab does, and only when you start a call there: it talks to your Twilio account, and to your Cloudinary account if you upload clips from this phone.",
+                Status.INFO,
+            ),
+            SetupItem(
                 "Silent mode and Do Not Disturb",
                 "CallStudio follows them. In silent mode a call appears without sound, and Do Not Disturb may hide it.",
                 Status.INFO,
