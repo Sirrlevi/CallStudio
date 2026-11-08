@@ -3,6 +3,20 @@
 package com.callstudio.app.ui.screens
 
 import androidx.compose.foundation.clickable
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.callstudio.app.MainActivity
+import com.callstudio.app.update.GitHubTokenStore
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -31,6 +45,7 @@ import com.callstudio.app.ui.Routes
 import com.callstudio.app.ui.components.AppTopBar
 import com.callstudio.app.ui.components.SectionTitle
 import com.callstudio.app.ui.viewmodels.SettingsViewModel
+import com.callstudio.app.preferences.NotificationBadgeStyle
 
 @Composable
 fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
@@ -64,6 +79,29 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
                 trailingContent = { Switch(checked = st.keepScreenOn, onCheckedChange = { vm.setKeepScreenOn(it) }) },
             )
 
+            SectionTitle("Notifications")
+            ListItem(
+                headlineContent = { Text("Caller photo badge") },
+                supportingContent = {
+                    Column {
+                        Text("Choose the optional marker shown on the caller photo in call notifications.")
+                        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                            val choices = listOf(
+                                NotificationBadgeStyle.ONLINE_DOT to "Green dot",
+                                NotificationBadgeStyle.APP_LOGO to "Phone logo",
+                            )
+                            choices.forEachIndexed { index, (style, label) ->
+                                SegmentedButton(
+                                    selected = st.notificationBadgeStyle == style,
+                                    onClick = { vm.setNotificationBadgeStyle(style) },
+                                    shape = SegmentedButtonDefaults.itemShape(index, choices.size),
+                                ) { Text(label, maxLines = 1) }
+                            }
+                        }
+                    }
+                },
+            )
+
             SectionTitle("Recording")
             ListItem(
                 headlineContent = { Text("Recording quality") },
@@ -85,10 +123,13 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
             NavRow("Call history", "Answered, declined and missed calls") { nav.navigate(Routes.HISTORY) }
             NavRow("Permissions and setup", "Check what Android allows") { nav.navigate(Routes.SETUP) }
 
+            SectionTitle("App updates")
+            UpdateAccessSettings()
+
             SectionTitle("About")
             Text(
-                "CallStudio creates a call-like experience on this phone only. It doesn't place real calls or contact anyone. " +
-                    "Callers, schedules, recordings and history stay on this device.",
+                "Phone can simulate scheduled incoming calls. Outgoing calls use the Twilio account configured in the Outgoing setup. " +
+                    "Caller profiles, schedules, recordings and history are stored on this device.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -105,4 +146,79 @@ private fun NavRow(title: String, subtitle: String, onClick: () -> Unit) {
         trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
         modifier = Modifier.clickable(onClick = onClick),
     )
+}
+
+@Composable
+private fun UpdateAccessSettings() {
+    val context = LocalContext.current
+    val tokenStore = remember { GitHubTokenStore(context) }
+    var token by remember { mutableStateOf("") }
+    var saved by remember { mutableStateOf(tokenStore.hasToken()) }
+    var message by remember { mutableStateOf("") }
+
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(
+            "Phone is stored in a private GitHub repository. Add a read-only token once so the app can check and download its updates automatically.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(
+            value = token,
+            onValueChange = { token = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("GitHub fine-grained token") },
+            placeholder = { Text("github_pat_…") },
+            visualTransformation = PasswordVisualTransformation(),
+            singleLine = true,
+        )
+        Spacer(Modifier.height(8.dp))
+        Button(
+            onClick = {
+                runCatching {
+                    tokenStore.saveToken(token)
+                    token = ""
+                    saved = true
+                    message = "Token saved securely. Checking for updates…"
+                    (context as? MainActivity)?.checkForUpdatesNow()
+                }.onFailure {
+                    message = it.message ?: "Could not save the token."
+                }
+            },
+            enabled = token.isNotBlank(),
+        ) {
+            Text("Save token and check")
+        }
+        TextButton(
+            onClick = {
+                runCatching {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/settings/personal-access-tokens/new"))
+                    )
+                }
+            },
+        ) {
+            Text("Create a fine-grained token")
+        }
+        if (saved) {
+            Text(
+                "Update access is saved on this phone. The token is encrypted with Android Keystore.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            TextButton(onClick = {
+                tokenStore.clear()
+                saved = false
+                message = "Saved update token removed."
+            }) { Text("Remove saved token") }
+        }
+        if (message.isNotBlank()) {
+            Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text(
+            "When creating the token, select only Sirrlevi/CallStudio and grant Contents: Read-only. Do not share this token.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }

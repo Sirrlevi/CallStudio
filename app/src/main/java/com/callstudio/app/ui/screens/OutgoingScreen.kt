@@ -6,7 +6,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -63,7 +62,7 @@ import com.callstudio.app.ui.viewmodels.OutgoingPhase
 import com.callstudio.app.ui.viewmodels.OutgoingViewModel
 
 @Composable
-fun RealOutgoingBody(nav: NavController, vm: OutgoingViewModel, pad: PaddingValues) {
+fun OutgoingScreen(nav: NavController, vm: OutgoingViewModel = viewModel()) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     var showCountries by remember { mutableStateOf(false) }
@@ -78,6 +77,15 @@ fun RealOutgoingBody(nav: NavController, vm: OutgoingViewModel, pad: PaddingValu
         if (uri != null) vm.pickContact(uri)
     }
 
+    Scaffold(
+        topBar = {
+            AppTopBar("Outgoing call") {
+                IconButton(onClick = { nav.navigate(Routes.OUTGOING_SETUP) }) {
+                    Icon(Icons.Filled.Settings, contentDescription = "Outgoing setup")
+                }
+            }
+        },
+    ) { pad ->
         Column(
             Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -197,6 +205,7 @@ fun RealOutgoingBody(nav: NavController, vm: OutgoingViewModel, pad: PaddingValu
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
 
     if (showCountries) {
         CountryPickerDialog(onPick = { vm.setCountry(it.iso); showCountries = false }, onDismiss = { showCountries = false })

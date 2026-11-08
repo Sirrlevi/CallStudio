@@ -14,6 +14,12 @@ interface CallerDao {
     @Query("SELECT * FROM callers WHERE id = :id")
     suspend fun get(id: Long): CallerEntity?
 
+    @Query("SELECT * FROM callers")
+    suspend fun getAll(): List<CallerEntity>
+
+    @Query("UPDATE callers SET countryIso = :iso WHERE countryIso = '' AND LENGTH(phone) = 10")
+    suspend fun fillMissingLocalCountry(iso: String)
+
     @Query("SELECT * FROM callers ORDER BY lastUsedAt DESC, id LIMIT 1")
     suspend fun mostRecentlyUsed(): CallerEntity?
 

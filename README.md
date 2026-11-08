@@ -38,28 +38,9 @@ Contacts: asked only when you tap **Choose from contacts**. Android's picker doe
 - **Caller voice per call**: when you schedule a call you can optionally add an audio clip for that call only. Different calls can have different clips, and a call without one plays nothing. Settings only decides how a clip plays (once, repeat, or manual). The clip finishing never ends the call; only **End call** does.
 - **Recording**: tap **Record** in the call screen. Mute silences your microphone in the recording. Recordings are microphone-only 16-bit WAV files, listed under **Settings → Recordings**.
 
-## Outgoing tab
+## Outgoing tab (real calls, optional)
 
-The tab has two modes: **Fake call** (staged on your phone) and **Real call** (through Twilio).
-
-### Fake call
-
-1. Pick a saved caller, the same way as for incoming calls.
-2. Optionally attach an audio file.
-3. Optionally choose how it ends (default **Random**), then tap **Call**.
-
-You get a full-screen outgoing call: stock-phone style ("Calling via SIM 1", name, number, country, Keypad / Mute / Speaker / Hold, red end button), or the Truecaller-style screen when that theme is selected. The status moves from Calling to Ringing, with a pulsing photo, and then the call plays out:
-
-- **Random** picks from: answered (about 45%), no answer (20%), declined (12%), network drop (12%), busy (11%).
-- Whatever happens, it **rings for at least 20 seconds**, so it is never picked up or cut straight away. It ends or connects somewhere between about 22 and 46 seconds in.
-- **Answered:** soft connect click and a short vibration, then the connected screen with a running timer. An attached audio file starts by itself about a second later (repeat follows the Settings option); End call ends it.
-- **Unanswered / declined / busy / network drop:** the matching tone, then "No answer", "Call declined", "Number busy" or "Call failed" for a moment, and the screen closes like a phone returning to the dialer.
-
-Sounds are the phone's own supervisory tones (ringback, busy, network-failure, end-of-call) played on the call stream, so they match the device and region. Back keeps the call running; End call ends it. Mute and Hold are staged: Hold pauses the attached audio, Mute only changes the display because no microphone is in use.
-
-### Real call (optional)
-
-Fake incoming and fake outgoing calls stay fully local. **Real call** is separate and does use the internet.
+Fake incoming calls stay fully local. The **Outgoing** tab is separate and does use the internet.
 
 1. Enter a number (country picker) or choose a contact.
 2. Add one or more clips (audio files from this phone, or links) and put them in order.
@@ -117,7 +98,6 @@ Instrumentation tests (`app/src/androidTest`) need a device or emulator: `gradle
 | --- | --- |
 | Source written, unit and instrumentation tests written (including country codes, per-call clips, migration columns) | Done |
 | Database migration 1 → 2 | Written, **not tested** on a real upgrade |
-| Real call (Twilio, upload, status polling) | Written, **never run against the real services** |
-| Fake outgoing call (randomness unit tested; tones, timing and screens) | Written, **not run on a phone**: how the tones sound on your device is unverified |
+| Outgoing tab (Twilio, upload, status polling) | Written, **never run against the real services** |
 | Gradle build, unit tests, `assembleDebug` | **Not run** (no SDK or network where this was written). Run in GitHub Actions. |
 | Behaviour on a phone or emulator (ringing, lock-screen, audio routing, recording, notifications) | **Not verified** |

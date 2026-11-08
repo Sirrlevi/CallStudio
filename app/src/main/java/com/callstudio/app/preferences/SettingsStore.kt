@@ -31,6 +31,7 @@ class SettingsStore(private val context: Context) {
         val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
         val RING_TIMEOUT = intPreferencesKey("ring_timeout_seconds")
         val SAMPLE_RATE = intPreferencesKey("recording_sample_rate")
+        val NOTIFICATION_BADGE = stringPreferencesKey("notification_badge_style")
         val LAST_CALLER = longPreferencesKey("last_caller_id")
     }
 
@@ -49,6 +50,7 @@ class SettingsStore(private val context: Context) {
                 keepScreenOn = p[K.KEEP_SCREEN_ON] ?: d.keepScreenOn,
                 ringTimeoutSeconds = p[K.RING_TIMEOUT] ?: d.ringTimeoutSeconds,
                 recordingSampleRate = p[K.SAMPLE_RATE] ?: d.recordingSampleRate,
+                notificationBadgeStyle = parse(p[K.NOTIFICATION_BADGE], d.notificationBadgeStyle),
                 lastCallerId = p[K.LAST_CALLER] ?: d.lastCallerId,
             )
         }
@@ -72,8 +74,20 @@ class SettingsStore(private val context: Context) {
     suspend fun setKeepScreenOn(on: Boolean) { context.dataStore.edit { it[K.KEEP_SCREEN_ON] = on } }
     suspend fun setRingTimeout(seconds: Int) { context.dataStore.edit { it[K.RING_TIMEOUT] = seconds } }
     suspend fun setRecordingSampleRate(hz: Int) { context.dataStore.edit { it[K.SAMPLE_RATE] = hz } }
+    suspend fun setNotificationBadgeStyle(style: NotificationBadgeStyle) {
+        context.dataStore.edit { it[K.NOTIFICATION_BADGE] = style.name }
+        // NotificationHelper runs from a foreground service; mirror this visual-only value
+        // so it can read the selected badge synchronously while building a notification.
+        context.getSharedPreferences(NOTIFICATION_PREF_FILE, Context.MODE_PRIVATE)
+            .edit().putString(NOTIFICATION_PREF_KEY, style.name).apply()
+    }
     suspend fun setLastCaller(id: Long?) {
         context.dataStore.edit { if (id == null) it.remove(K.LAST_CALLER) else it[K.LAST_CALLER] = id }
+    }
+
+    companion object {
+        const val NOTIFICATION_PREF_FILE = "notification_badge"
+        const val NOTIFICATION_PREF_KEY = "style"
     }
 
     private inline fun <reified T : Enum<T>> parse(value: String?, default: T): T =
