@@ -29,6 +29,13 @@
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
+    <!-- Lets the fake call find the phone's text-to-speech engine for spoken network messages (Android 11+). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
     <application
         android:name=".CallStudioApp"
         android:allowBackup="false"
@@ -53,6 +60,16 @@
             android:exported="false"
             android:launchMode="singleTask"
             android:taskAffinity=""
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@style/Theme.CallStudio.Call" />
+
+        <activity
+            android:name=".FakeOutgoingActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:screenOrientation="portrait"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:theme="@style/Theme.CallStudio.Call" />

@@ -12,6 +12,8 @@ import com.callstudio.app.preferences.RingtoneSource
 import com.callstudio.app.data.CallerRepository
 import com.callstudio.app.data.PhotoStore
 import com.callstudio.app.data.RecordingRepository
+import com.callstudio.app.fakeout.FakeOutgoingEngine
+import com.callstudio.app.fakeout.FakeOutgoingPrefs
 import com.callstudio.app.notifications.NotificationHelper
 import com.callstudio.app.outgoing.OutgoingSettingsStore
 import com.callstudio.app.preferences.SettingsStore
@@ -53,6 +55,11 @@ class AppContainer(app: Application) {
     val callers = CallerRepository(db.callerDao(), photos, coordinator)
     val recordings = RecordingRepository(app, db.recordingDao())
     val sessions = CallSessionManager(app, appScope, db.callDao(), recordings, settings, notifications, voiceLeases)
+    val fakeOutgoingPrefs = FakeOutgoingPrefs(app)
+    val fakeOutgoing = FakeOutgoingEngine(
+        app, appScope, fakeOutgoingPrefs, settings,
+        otherCallLive = { sessions.session.value.isLive },
+    )
 
     fun start() {
         notifications.ensureChannels()
