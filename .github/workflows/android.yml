@@ -34,32 +34,6 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
-      # Keep one private signing key in the private release. Each hosted runner is fresh,
-      # so a normal debug keystore would otherwise change on every build and break updates.
-      - name: Restore or create stable Phone signing key
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG=debug-latest
-          mkdir -p "$HOME/.android"
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --title "Phone debug builds (latest)" --notes "Private Phone debug builds." --prerelease --target "$GITHUB_SHA"
-          fi
-          KEYSTORE="$HOME/.android/phone-debug.keystore"
-          if gh release download "$TAG" --pattern "Phone-signing.keystore" --dir "$HOME/.android" >/dev/null 2>&1; then
-            mv "$HOME/.android/Phone-signing.keystore" "$KEYSTORE"
-            echo "Restored stable signing key from private release."
-          else
-            keytool -genkeypair -noprompt \
-              -keystore "$KEYSTORE" \
-              -storepass phone-debug-v1 \
-              -keypass phone-debug-v1 \
-              -alias phone \
-              -dname "CN=Phone Android App, O=Sirrlevi, C=IN" \
-              -keyalg RSA -keysize 2048 -validity 10000
-            echo "Created first stable Phone signing key."
-          fi
-
       - name: Run unit tests
         run: gradle --no-daemon --stacktrace :app:testDebugUnitTest
 
@@ -77,46 +51,20 @@ jobs:
           echo "Found $APK"
           echo "path=$APK" >> "$GITHUB_OUTPUT"
 
-      - name: Confirm this is the latest master commit
-        id: latest
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          LATEST_SHA=$(gh api repos/Sirrlevi/CallStudio/branches/master --jq '.commit.sha')
-          if [ "$LATEST_SHA" = "$GITHUB_SHA" ]; then
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "This run is stale; it will not replace the latest Phone APK."
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-          fi
-
       # Release assets do not count against the Actions artifact storage quota.
-      - name: Publish Phone APK and update manifest
-        if: steps.latest.outputs.publish == 'true'
+      - name: Publish APK to the debug-latest release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp "${{ steps.apk.outputs.path }}" Phone-debug.apk
-          cp "$HOME/.android/phone-debug.keystore" Phone-signing.keystore
+          cp "${{ steps.apk.outputs.path }}" CallStudio-debug.apk
           TAG=debug-latest
-          VERSION_CODE=$(grep -Eo 'versionCode = [0-9]+' app/build.gradle.kts | head -n 1 | awk '{print $3}')
-          VERSION_NAME=$(grep -Eo 'versionName = "[^"]+"' app/build.gradle.kts | head -n 1 | cut -d '"' -f 2)
-          APK_SHA256=$(sha256sum Phone-debug.apk | awk '{print $1}')
-          if [ -z "$VERSION_CODE" ] || [ -z "$VERSION_NAME" ] || [ -z "$APK_SHA256" ]; then
-            echo "Could not create Phone update metadata." >&2
-            exit 1
+          NOTES="Debug build from commit ${GITHUB_SHA::7}. Not signed for the Play Store."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes "$NOTES"
+          else
+            gh release create "$TAG" --title "CallStudio debug build (latest)" --notes "$NOTES" --prerelease --target "$GITHUB_SHA"
           fi
-          cat > phone-update.json <<EOF
-          {
-            "packageName": "com.callstudio.app",
-            "versionCode": $VERSION_CODE,
-            "versionName": "$VERSION_NAME",
-            "sha256": "$APK_SHA256"
-          }
-          EOF
-          NOTES="Phone $VERSION_NAME (versionCode $VERSION_CODE) · commit ${GITHUB_SHA::7}. Debug channel."
-          gh release edit "$TAG" --notes "$NOTES"
-          gh release upload "$TAG" Phone-debug.apk phone-update.json Phone-signing.keystore --clobber
+          gh release upload "$TAG" CallStudio-debug.apk --clobber
 
       # Optional copy as a workflow artifact. Free accounts have a small storage quota, so a failure here is ignored.
       - name: Upload debug APK artifact

@@ -19,6 +19,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +41,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Sms
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -48,7 +55,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,10 +76,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -82,9 +85,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.callstudio.app.domain.TimeFormat
+import com.callstudio.app.fakeoutgoing.FakePhase
 import com.callstudio.app.ui.components.CallerAvatar
 import kotlinx.coroutines.delay
-import kotlin.math.abs
 
 private val TcGradient = Brush.verticalGradient(
     0f to Color(0xFF1570F5),
@@ -117,15 +120,7 @@ private fun Modifier.entrance(progress: State<Float>): Modifier = graphicsLayer 
 
 @Composable
 private fun TcTitle(modifier: Modifier = Modifier) {
-    val title = buildAnnotatedString {
-        pushStyle(SpanStyle(fontWeight = FontWeight.Medium, fontFamily = TcFont))
-        append("Identified by ")
-        pop()
-        pushStyle(SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic, fontFamily = FontFamily.Cursive))
-        append("truecaller")
-        pop()
-    }
-    Text(title, modifier, color = Color.White, fontSize = 25.sp, fontFamily = TcFont, textAlign = TextAlign.Center)
+    Text("Caller ID", modifier, color = Color.White, fontSize = 28.sp, fontFamily = TcFont, fontWeight = FontWeight.Bold)
 }
 
 @Composable
@@ -202,7 +197,6 @@ private fun RippleAvatar(c: CallerUi, size: Dp, rippling: Boolean = true) {
 @Composable
 fun TruecallerIncoming(c: CallerUi, a: IncomingActions) {
     var pressed by remember { mutableIntStateOf(0) } // 0 none, 1 decline, 2 answer
-    var dragProgress by remember { mutableFloatStateOf(0f) }
     var showProfile by remember { mutableStateOf(false) }
     val titleIn = rememberEntrance(0)
     val lineIn = rememberEntrance(90)
@@ -241,16 +235,14 @@ fun TruecallerIncoming(c: CallerUi, a: IncomingActions) {
             ) {
                 GrowButton(
                     color = TcRed, icon = Icons.Filled.CallEnd, description = "Decline",
-                    pressed = pressed == 1, dragProgress = dragProgress, dimmed = pressed == 2,
-                    onPressChange = { down -> pressed = if (down) 1 else 0; if (!down) dragProgress = 0f },
-                    onDragProgress = { dragProgress = it },
+                    pressed = pressed == 1, dimmed = pressed == 2,
+                    onPressChange = { down -> pressed = if (down) 1 else 0 },
                     onTrigger = a.onDecline,
                 )
                 GrowButton(
                     color = TcGreen, icon = Icons.Filled.Call, description = "Answer",
-                    pressed = pressed == 2, dragProgress = dragProgress, dimmed = pressed == 1,
-                    onPressChange = { down -> pressed = if (down) 2 else 0; if (!down) dragProgress = 0f },
-                    onDragProgress = { dragProgress = it },
+                    pressed = pressed == 2, dimmed = pressed == 1,
+                    onPressChange = { down -> pressed = if (down) 2 else 0 },
                     onTrigger = a.onAnswer,
                 )
             }
@@ -271,23 +263,23 @@ fun TruecallerIncoming(c: CallerUi, a: IncomingActions) {
     if (showProfile) ProfileDialog(c) { showProfile = false }
 }
 
-/** A tap activates immediately; dragging upward grows this button around its fixed centre until release. */
+/**
+ * Press and hold: the button swells to fill the lower half while the other one fades; release to confirm, or slide
+ * your finger off the button to cancel. A plain tap works too.
+ */
 @Composable
 private fun GrowButton(
     color: Color,
     icon: ImageVector,
     description: String,
     pressed: Boolean,
-    dragProgress: Float,
     dimmed: Boolean,
     onPressChange: (Boolean) -> Unit,
-    onDragProgress: (Float) -> Unit,
     onTrigger: () -> Unit,
 ) {
-    // The scale is applied around the button's own centre. The button never translates or follows the finger.
     val scale by animateFloatAsState(
-        targetValue = if (pressed) 1.18f + 2.02f * dragProgress else 1f,
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow),
+        if (pressed) 3.4f else 1f,
+        spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow),
         label = "grow",
     )
     val dim by animateFloatAsState(if (dimmed) 0.3f else 1f, tween(250), label = "dim")
@@ -298,45 +290,18 @@ private fun GrowButton(
     )
     val haptic = LocalHapticFeedback.current
     val currentPress by rememberUpdatedState(onPressChange)
-    val currentDrag by rememberUpdatedState(onDragProgress)
     val currentTrigger by rememberUpdatedState(onTrigger)
 
     Box(
         Modifier.size(100.dp).zIndex(if (pressed) 2f else 0f).graphicsLayer { alpha = dim }
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
+                    awaitFirstDown(requireUnconsumed = false)
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     currentPress(true)
-                    currentDrag(0f)
-                    val maxDragPx = size.height * 1.25f
-                    var maxProgress = 0f
-                    var lastDx = 0f
-                    var lastDy = 0f
-                    var horizontalCancel = false
-                    var receivedUp = false
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        lastDx = change.position.x - down.position.x
-                        lastDy = down.position.y - change.position.y
-                        if (abs(lastDx) > size.width * 0.75f) horizontalCancel = true
-                        val progress = (lastDy / maxDragPx).coerceIn(0f, 1f)
-                        if (progress > maxProgress) maxProgress = progress
-                        currentDrag(progress)
-                        if (!change.pressed) {
-                            receivedUp = true
-                            change.consume()
-                            break
-                        }
-                        change.consume()
-                    }
+                    val up = waitForUpOrCancellation()
                     currentPress(false)
-                    currentDrag(0f)
-                    val slop = viewConfiguration.touchSlop
-                    val wasTap = abs(lastDx) <= slop && abs(lastDy) <= slop
-                    val completedUpwardDrag = maxProgress >= 0.12f && lastDy >= 0f
-                    if (receivedUp && !horizontalCancel && (wasTap || completedUpwardDrag)) currentTrigger()
+                    if (up != null) currentTrigger()
                 }
             }
             .semantics(mergeDescendants = true) {
@@ -471,4 +436,77 @@ private fun TcPill(spec: ControlSpec) {
         Spacer(Modifier.width(8.dp))
         Text(spec.label, color = Color.White, fontSize = 14.sp, fontFamily = TcFont, maxLines = 1)
     }
+}
+
+// ---- outgoing ---------------------------------------------------------------------------------------------
+
+@Composable
+fun TruecallerOutgoing(m: OutgoingCallModel) {
+    var showProfile by remember { mutableStateOf(false) }
+    val titleIn = rememberEntrance(0)
+    val bodyIn = rememberEntrance(120)
+    val gridIn = rememberEntrance(240)
+    val status = outgoingStatusText(m)
+    val calling = m.phase == FakePhase.DIALING || m.phase == FakePhase.RINGING
+    val connected = m.phase == FakePhase.CONNECTED
+    val ended = m.phase == FakePhase.ENDED
+
+    val keypad = ControlSpec("keypad", "Keypad", Icons.Filled.Dialpad, onClick = m.onKeypad)
+    val mute = ControlSpec("mute", "Mute", if (m.muted) Icons.Filled.MicOff else Icons.Filled.Mic, active = m.muted, onClick = m.onMute)
+    val speaker = ControlSpec("speaker", "Speaker", Icons.Filled.VolumeUp, active = m.speakerOn, onClick = m.onSpeaker)
+    val hold = ControlSpec(
+        "hold", if (m.held) "Resume" else "Hold", if (m.held) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+        active = m.held, enabled = connected, onClick = m.onHold,
+    )
+
+    CallSurface(TcGradient) {
+        val avatar = minOf(maxWidth * 0.34f, maxHeight * 0.16f).coerceAtLeast(84.dp)
+        Column(Modifier.fillMaxSize().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Spacer(Modifier.height(36.dp))
+                TcTitle(Modifier.entrance(titleIn))
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.entrance(titleIn), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        status, color = Color.White, fontSize = 17.sp, fontFamily = TcFont,
+                        fontWeight = if (connected) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                    if (m.caller.phone.isNotBlank() && !ended) {
+                        Box(Modifier.padding(horizontal = 10.dp).width(1.dp).height(16.dp).background(Color(0x66FFFFFF)))
+                        Text(m.caller.phone, color = Color(0xCCFFFFFF), fontSize = 17.sp, fontFamily = TcFont)
+                    }
+                }
+                Spacer(Modifier.height(28.dp))
+                Box(Modifier.entrance(bodyIn)) { RippleAvatar(m.caller, avatar, rippling = calling) }
+                Spacer(Modifier.height(8.dp))
+                TcName(m.caller.title, Modifier.entrance(bodyIn))
+                Spacer(Modifier.height(20.dp))
+                ViewProfileButton({ showProfile = true }, Modifier.entrance(bodyIn))
+            }
+            Column(Modifier.fillMaxWidth().entrance(gridIn).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    TcCell(mute, Modifier.weight(1f))
+                    TcCell(keypad, Modifier.weight(1f))
+                    TcCell(speaker, Modifier.weight(1f))
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                    TcCell(hold, Modifier.weight(1f))
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            Modifier.size(62.dp).clip(CircleShape).background(TcRed)
+                                .clickable(onClickLabel = "End call", role = Role.Button, onClick = m.onEnd),
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(Icons.Filled.CallEnd, contentDescription = "End call", tint = Color.White, modifier = Modifier.size(30.dp)) }
+                        Spacer(Modifier.height(6.dp))
+                        Text("End", color = Color.White, fontSize = 15.sp, fontFamily = TcFont)
+                    }
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+        }
+    }
+    if (showProfile) ProfileDialog(m.caller) { showProfile = false }
 }

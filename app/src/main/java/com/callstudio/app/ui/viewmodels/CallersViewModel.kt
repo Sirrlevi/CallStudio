@@ -8,12 +8,10 @@ import com.callstudio.app.container
 import com.callstudio.app.contacts.ContactInfo
 import com.callstudio.app.contacts.ContactsHelper
 import com.callstudio.app.data.CallerEntity
-import com.callstudio.app.domain.PhoneNumbers
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
-import java.util.Locale
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -37,51 +35,6 @@ class CallersViewModel(app: Application) : AndroidViewModel(app) {
 
     fun discardPhoto(name: String?) = c.photos.delete(name)
 
-    data class ContactImportSummary(val scanned: Int, val imported: Int)
-
-    /** Imports all phone-number entries, detects country calling codes, and copies contact photos. */
-    suspend fun importAllContacts(): ContactImportSummary {
-        val app = getApplication<Application>()
-        val defaultIso = withContext(Dispatchers.IO) { ContactsHelper.defaultCountryIso(app) }
-        c.callers.fillMissingLocalCountry(defaultIso)
-        val entries = withContext(Dispatchers.IO) { ContactsHelper.readAll(app) }
-        val candidates = ArrayList<CallerEntity>()
-        val seen = mutableSetOf<String>()
-        val now = System.currentTimeMillis()
-        for (entry in entries) {
-            val raw = entry.numberForParsing
-            val rawDigits = raw.filter(Char::isDigit)
-            val parsed = if (
-                defaultIso == "IN" &&
-                !raw.startsWith("+") &&
-                !raw.startsWith("00") &&
-                rawDigits.length == 12 &&
-                rawDigits.startsWith("91")
-            ) {
-                // A common Indian contact-book format stores 91 + 10 digits without the leading '+'.
-                PhoneNumbers.Parsed("IN", rawDigits.drop(2))
-            } else {
-                PhoneNumbers.normalize(raw, defaultIso)
-            }
-            var national = parsed.national
-            // Indian mobile/STD numbers sometimes arrive in local trunk form (0 + 10 digits).
-            if (parsed.iso == "IN" && national.length == 11 && national.startsWith('0')) {
-                national = national.drop(1)
-            }
-            val key = "${parsed.iso.uppercase(Locale.ROOT)}:${national.filter(Char::isDigit)}"
-            if (national.isBlank() || !seen.add(key)) continue
-            val photo = c.photos.importFrom { ContactsHelper.openPhoto(app, entry) }
-            candidates += CallerEntity(
-                name = entry.name.ifBlank { PhoneNumbers.display(parsed.iso, national) },
-                phone = national,
-                countryIso = parsed.iso,
-                photoFile = photo,
-                createdAt = now,
-            )
-        }
-        val inserted = c.callers.importContacts(candidates)
-        return ContactImportSummary(scanned = entries.size, imported = inserted)
-    }
     /** The contact's name, number and (when Android allows it) photo, copied into app storage. */
     data class ContactPick(val info: ContactInfo, val photoFile: String?)
 

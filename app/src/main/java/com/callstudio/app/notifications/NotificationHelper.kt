@@ -9,14 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.RectF
-import android.graphics.Color as AndroidColor
-import android.widget.RemoteViews
 import android.media.AudioAttributes
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -26,8 +21,6 @@ import com.callstudio.app.CallActivity
 import com.callstudio.app.R
 import com.callstudio.app.data.PhotoStore
 import com.callstudio.app.permissions.SystemAccess
-import com.callstudio.app.preferences.NotificationBadgeStyle
-import com.callstudio.app.preferences.SettingsStore
 import com.callstudio.app.session.SessionState
 
 class NotificationHelper(private val context: Context, private val photos: PhotoStore) {
@@ -67,13 +60,10 @@ class NotificationHelper(private val context: Context, private val photos: Photo
         val open = activityIntent(s.eventId, answer = false)
         val answer = activityIntent(s.eventId, answer = true)
         val decline = broadcastIntent(s.eventId, ACTION_DECLINE, RequestCodes.DECLINE)
-        val badgeStyle = readBadgeStyle()
-        val callerPortrait = avatar(s.callerPhotoFile, badgeStyle)
         val b = NotificationCompat.Builder(context, if (backup) CHANNEL_BACKUP else CHANNEL_INCOMING)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(s.displayName)
             .setContentText("Incoming call")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("Incoming call"))
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -81,13 +71,13 @@ class NotificationHelper(private val context: Context, private val photos: Photo
             .setAutoCancel(false)
             .setContentIntent(open)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .addAction(0, "Decline", decline)
-            .addAction(0, "Answer", answer)
-
-        if (callerPortrait != null) b.setLargeIcon(callerPortrait)
-        // The full-screen activity remains responsible for the Truecaller-style incoming UI.
-        // A standard call-category notification avoids Android's extra app-icon badge on the photo.
+        // Without full-screen access this stays a heads-up notification.
         if (SystemAccess.fullScreenAllowed(context)) b.setFullScreenIntent(open, true)
+        if (backup) {
+            b.addAction(0, "Decline", decline).addAction(0, "Answer", answer)
+        } else {
+            b.setStyle(NotificationCompat.CallStyle.forIncomingCall(person(s), decline, answer))
+        }
         val n = b.build()
         if (backup) n.flags = n.flags or Notification.FLAG_INSISTENT
         return n
@@ -96,41 +86,23 @@ class NotificationHelper(private val context: Context, private val photos: Photo
     fun buildOngoing(s: SessionState): Notification {
         val hangUp = broadcastIntent(s.eventId, ACTION_END, RequestCodes.HANG_UP)
         val mute = broadcastIntent(s.eventId, ACTION_TOGGLE_MUTE, RequestCodes.MUTE)
-        val badgeStyle = readBadgeStyle()
-        // Do not use CallStyle here: on some Android skins it forcibly overlays the
-        // system/Android app badge on the caller portrait. This custom card keeps the
-        // caller photo clean and lets the user choose the optional online/app marker.
-        val portrait = avatar(s.callerPhotoFile, badgeStyle)
-        val remote = RemoteViews(context.packageName, R.layout.notification_ongoing).apply {
-            setTextViewText(R.id.call_title, s.displayName.ifBlank { "Unknown" })
-            setTextViewText(R.id.call_status, if (s.recording.isActive) "Ongoing call · Recording" else "Ongoing call")
-            setTextViewText(R.id.action_mute, if (s.muted) "Unmute" else "Mute")
-            if (portrait != null) setImageViewBitmap(R.id.call_avatar, portrait)
-            setOnClickPendingIntent(R.id.ongoing_root, activityIntent(s.eventId, answer = false))
-            setOnClickPendingIntent(R.id.action_hangup, hangUp)
-            setOnClickPendingIntent(R.id.action_mute, mute)
-        }
-
+        val recording = s.recording.isActive
         return NotificationCompat.Builder(context, CHANNEL_ONGOING)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(s.displayName.ifBlank { "Ongoing call" })
-            .setContentText("Ongoing call")
+            .setContentTitle(s.displayName)
+            .setContentText(if (recording) "Ongoing call · Recording" else "Ongoing call")
             .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setUsesChronometer(true)
+            .setShowWhen(true)
+            .setWhen(s.answeredAtMillis)
             .setContentIntent(activityIntent(s.eventId, answer = false))
-            .setCustomContentView(remote)
-            .setCustomBigContentView(remote)
-            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setStyle(NotificationCompat.CallStyle.forOngoingCall(person(s), hangUp))
+            .addAction(0, if (s.muted) "Unmute" else "Mute", mute)
             .build()
     }
-
-    private fun readBadgeStyle(): NotificationBadgeStyle = runCatching {
-        val raw = context.getSharedPreferences(SettingsStore.NOTIFICATION_PREF_FILE, Context.MODE_PRIVATE)
-            .getString(SettingsStore.NOTIFICATION_PREF_KEY, NotificationBadgeStyle.APP_LOGO.name)
-        NotificationBadgeStyle.valueOf(raw ?: NotificationBadgeStyle.APP_LOGO.name)
-    }.getOrDefault(NotificationBadgeStyle.APP_LOGO)
 
     /** Placeholder used only to satisfy the foreground-service contract when the call is already over. */
     fun buildEnded(): Notification =
@@ -171,58 +143,17 @@ class NotificationHelper(private val context: Context, private val photos: Photo
         )
     }
 
-    /** Makes a true circular contact portrait and composites the user's chosen badge into it. */
-    private fun avatar(name: String?, badgeStyle: NotificationBadgeStyle, useSystemAppBadge: Boolean = false): Bitmap? {
+    private fun person(s: SessionState): Person {
+        val builder = Person.Builder().setName(s.displayName.ifBlank { "Unknown" }).setImportant(true)
+        avatar(s.callerPhotoFile)?.let { builder.setIcon(IconCompat.createWithBitmap(it)) }
+        return builder.build()
+    }
+
+    private fun avatar(name: String?): Bitmap? {
         val file = photos.file(name) ?: return null
         return try {
-            val source = BitmapFactory.decodeFile(file.path) ?: return null
-            val side = minOf(source.width, source.height)
-            val crop = Bitmap.createBitmap(
-                source,
-                (source.width - side) / 2,
-                (source.height - side) / 2,
-                side,
-                side,
-            )
-            val size = 192
-            val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(output)
-            val portraitPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-            val circle = Path().apply { addCircle(size / 2f, size / 2f, size / 2f - 1f, Path.Direction.CW) }
-            canvas.save()
-            canvas.clipPath(circle)
-            canvas.drawBitmap(crop, null, RectF(0f, 0f, size.toFloat(), size.toFloat()), portraitPaint)
-            canvas.restore()
-            crop.recycle()
-            if (source !== crop && !source.isRecycled) source.recycle()
-
-            val cx = size * 0.79f
-            val cy = size * 0.79f
-            val radius = size * 0.17f
-            val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG)
-            badgePaint.color = AndroidColor.WHITE
-            canvas.drawCircle(cx, cy, radius + 4f, badgePaint)
-            when (badgeStyle) {
-                NotificationBadgeStyle.ONLINE_DOT -> {
-                    badgePaint.color = AndroidColor.rgb(46, 204, 96)
-                    canvas.drawCircle(cx, cy, radius, badgePaint)
-                }
-                NotificationBadgeStyle.APP_LOGO -> if (!useSystemAppBadge) {
-                    badgePaint.color = AndroidColor.rgb(26, 115, 232)
-                    canvas.drawCircle(cx, cy, radius, badgePaint)
-                    val phone = Path().apply {
-                        moveTo(cx - radius * 0.45f, cy - radius * 0.48f)
-                        cubicTo(cx - radius * 0.62f, cy - radius * 0.35f, cx - radius * 0.30f, cy + radius * 0.37f, cx + radius * 0.43f, cy + radius * 0.48f)
-                    }
-                    badgePaint.color = AndroidColor.WHITE
-                    badgePaint.style = Paint.Style.STROKE
-                    badgePaint.strokeWidth = 7f
-                    badgePaint.strokeCap = Paint.Cap.ROUND
-                    badgePaint.strokeJoin = Paint.Join.ROUND
-                    canvas.drawPath(phone, badgePaint)
-                }
-            }
-            output
+            val bmp = BitmapFactory.decodeFile(file.path) ?: return null
+            Bitmap.createScaledBitmap(bmp, 192, 192, true)
         } catch (e: Exception) {
             null
         }

@@ -34,8 +34,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -58,7 +56,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -80,58 +77,14 @@ import kotlinx.coroutines.launch
 @Composable
 fun CallersScreen(nav: NavController, vm: CallersViewModel = viewModel()) {
     val callers by vm.callers.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     var deleting by remember { mutableStateOf<CallerEntity?>(null) }
-    var importing by remember { mutableStateOf(false) }
-    var importMessage by remember { mutableStateOf<String?>(null) }
     val list = callers
-
-    suspend fun importPhonebook() {
-        importing = true
-        importMessage = null
-        try {
-            val result = vm.importAllContacts()
-            importMessage = when {
-                result.scanned == 0 -> "No phone contacts with numbers were found. Check Contacts permission and try again."
-                result.imported == 0 -> "All ${result.scanned} phone entries are already saved."
-                else -> "Imported ${result.imported} contacts from ${result.scanned} phone entries. Countries and names were arranged automatically."
-            }
-        } catch (error: Exception) {
-            importMessage = error.message ?: "Could not import phone contacts."
-        } finally {
-            importing = false
-        }
-    }
-
-    val contactsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) scope.launch { importPhonebook() }
-        else importMessage = "Contacts permission was denied. Allow it in Android settings to import your phonebook."
-    }
-    val importAction: () -> Unit = {
-        if (!importing) {
-            if (SystemAccess.contactsGranted(context)) scope.launch { importPhonebook() }
-            else contactsPermission.launch(Manifest.permission.READ_CONTACTS)
-        }
-    }
 
     Scaffold(
         topBar = { AppTopBar("Callers") },
         floatingActionButton = {
-            Column(horizontalAlignment = Alignment.End) {
-                ExtendedFloatingActionButton(
-                    onClick = importAction,
-                    icon = {
-                        if (importing) CircularProgressIndicator(strokeWidth = 2.dp)
-                        else Icon(Icons.Filled.Contacts, contentDescription = null)
-                    },
-                    text = { Text(if (importing) "Importing…" else "Import contacts") },
-                    expanded = true,
-                )
-                Spacer(Modifier.height(12.dp))
-                FloatingActionButton(onClick = { nav.navigate(Routes.callerEdit(0)) }) {
-                    Icon(Icons.Filled.Add, contentDescription = "Add caller")
-                }
+            FloatingActionButton(onClick = { nav.navigate(Routes.callerEdit(0)) }) {
+                Icon(Icons.Filled.Add, contentDescription = "Add caller")
             }
         },
     ) { pad ->
@@ -140,53 +93,27 @@ fun CallersScreen(nav: NavController, vm: CallersViewModel = viewModel()) {
                 list == null -> LoadingBox()
                 list.isEmpty() -> EmptyState(
                     Icons.Filled.Person, "No callers yet",
-                    "Import your phone contacts or create a custom caller with their own photo.",
+                    "Add someone from your contacts or create a custom caller with their own photo.",
                     "Add caller",
                 ) { nav.navigate(Routes.callerEdit(0)) }
-                else -> {
-                    val groups = list.groupBy { it.countryIso.ifBlank { "ZZ" } }
-                        .toList()
-                        .sortedBy { Countries.nameOf(it.first) ?: "Other" }
-                    LazyColumn {
-                        importMessage?.let { message ->
-                            item(key = "import-status") {
-                                Text(
-                                    message,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                        }
-                        groups.forEach { (iso, entries) ->
-                            item(key = "country-$iso") {
-                                Text(
-                                    text = "${Countries.flag(iso)}  ${Countries.nameOf(iso) ?: "Other / unknown country"}  ·  ${entries.size}",
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                            }
-                            items(entries.sortedBy { it.name.lowercase() }, key = { it.id }) { c ->
-                                ListItem(
-                                    headlineContent = { Text(c.name) },
-                                    supportingContent = if (c.phone.isNotBlank()) ({ Text(c.displayNumber()) }) else null,
-                                    leadingContent = { CallerAvatar(c.photoFile, c.name, 44.dp) },
-                                    trailingContent = {
-                                        Row {
-                                            IconButton(onClick = { nav.navigate(Routes.schedule(c.id)) }) {
-                                                Icon(Icons.Filled.Alarm, contentDescription = "Schedule a call from ${c.name}")
-                                            }
-                                            IconButton(onClick = { deleting = c }) {
-                                                Icon(Icons.Filled.Delete, contentDescription = "Delete ${c.name}")
-                                            }
-                                        }
-                                    },
-                                    modifier = Modifier.clickable { nav.navigate(Routes.callerEdit(c.id)) },
-                                )
-                            }
-                        }
+                else -> LazyColumn {
+                    items(list, key = { it.id }) { c ->
+                        ListItem(
+                            headlineContent = { Text(c.name) },
+                            supportingContent = if (c.phone.isNotBlank()) ({ Text(c.displayNumber()) }) else null,
+                            leadingContent = { CallerAvatar(c.photoFile, c.name, 44.dp) },
+                            trailingContent = {
+                                Row {
+                                    IconButton(onClick = { nav.navigate(Routes.schedule(c.id)) }) {
+                                        Icon(Icons.Filled.Alarm, contentDescription = "Schedule a call from ${c.name}")
+                                    }
+                                    IconButton(onClick = { deleting = c }) {
+                                        Icon(Icons.Filled.Delete, contentDescription = "Delete ${c.name}")
+                                    }
+                                }
+                            },
+                            modifier = Modifier.clickable { nav.navigate(Routes.callerEdit(c.id)) },
+                        )
                     }
                 }
             }
@@ -259,7 +186,7 @@ fun CallerEditScreen(nav: NavController, callerId: Long, vm: CallersViewModel = 
             } else {
                 error = null
                 if (picked.info.name.isNotBlank()) name = picked.info.name
-                val parsed = PhoneNumbers.normalize(picked.info.numberForParsing, iso)
+                val parsed = PhoneNumbers.normalize(picked.info.number, iso)
                 iso = parsed.iso
                 phone = PhoneNumbers.group(parsed.national, parsed.iso)
                 notice = when {

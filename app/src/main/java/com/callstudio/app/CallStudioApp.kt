@@ -12,6 +12,7 @@ import com.callstudio.app.preferences.RingtoneSource
 import com.callstudio.app.data.CallerRepository
 import com.callstudio.app.data.PhotoStore
 import com.callstudio.app.data.RecordingRepository
+import com.callstudio.app.fakeoutgoing.FakeOutgoingController
 import com.callstudio.app.notifications.NotificationHelper
 import com.callstudio.app.outgoing.OutgoingSettingsStore
 import com.callstudio.app.preferences.SettingsStore
@@ -52,6 +53,7 @@ class AppContainer(app: Application) {
     val coordinator = ScheduleCoordinator(db.callDao(), SchedulingEngine(AndroidAlarmBackend(app)), leases = voiceLeases)
     val callers = CallerRepository(db.callerDao(), photos, coordinator)
     val recordings = RecordingRepository(app, db.recordingDao())
+    val fakeOutgoing = FakeOutgoingController(app, appScope, settings)
     val sessions = CallSessionManager(app, appScope, db.callDao(), recordings, settings, notifications, voiceLeases)
 
     fun start() {
