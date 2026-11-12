@@ -15,8 +15,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import com.callstudio.app.MainActivity
-import com.callstudio.app.update.GitHubTokenStore
+import com.callstudio.app.container
+import com.callstudio.app.update.UpdateUiState
+import com.callstudio.app.ui.components.DownloadProgress
+import com.callstudio.app.ui.components.describeBuild
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -45,6 +48,7 @@ import com.callstudio.app.ui.Routes
 import com.callstudio.app.ui.components.AppTopBar
 import com.callstudio.app.ui.components.SectionTitle
 import com.callstudio.app.ui.viewmodels.SettingsViewModel
+import com.callstudio.app.preferences.EdgeGlowStyle
 import com.callstudio.app.preferences.NotificationBadgeStyle
 
 @Composable
@@ -77,6 +81,24 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
             ListItem(
                 headlineContent = { Text("Keep screen on during calls") },
                 trailingContent = { Switch(checked = st.keepScreenOn, onCheckedChange = { vm.setKeepScreenOn(it) }) },
+            )
+            ListItem(
+                headlineContent = { Text("Neon edge glow") },
+                supportingContent = {
+                    Column {
+                        Text("Coloured light that runs around the screen edge while a call rings.")
+                        val glowChoices = EdgeGlowStyle.entries
+                        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                            glowChoices.forEachIndexed { index, style ->
+                                SegmentedButton(
+                                    selected = st.edgeGlow == style,
+                                    onClick = { vm.setEdgeGlow(style) },
+                                    shape = SegmentedButtonDefaults.itemShape(index, glowChoices.size),
+                                ) { Text(style.label, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelMedium) }
+                            }
+                        }
+                    }
+                },
             )
 
             SectionTitle("Notifications")
@@ -151,12 +173,62 @@ private fun NavRow(title: String, subtitle: String, onClick: () -> Unit) {
 @Composable
 private fun UpdateAccessSettings() {
     val context = LocalContext.current
-    val tokenStore = remember { GitHubTokenStore(context) }
+    val updates = remember { context.container.updates }
+    val state by updates.state.collectAsStateWithLifecycle()
     var token by remember { mutableStateOf("") }
-    var saved by remember { mutableStateOf(tokenStore.hasToken()) }
+    var saved by remember { mutableStateOf(updates.hasToken()) }
     var message by remember { mutableStateOf("") }
 
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(
+            "Installed: ${describeBuild(updates.installedVersionName, updates.installedVersionCode)}",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        val status = when (val s = state) {
+            UpdateUiState.Checking -> "Checking for updates…"
+            UpdateUiState.UpToDate -> "You have the latest version."
+            is UpdateUiState.CheckFailed -> s.message
+            is UpdateUiState.Available -> "Update available: ${s.info.versionName}"
+            is UpdateUiState.Downloading -> "Downloading ${s.info.versionName}…"
+            is UpdateUiState.ReadyToInstall -> "Ready to install: ${s.info.versionName}"
+            UpdateUiState.NotConfigured -> "Add the token below to turn updates on."
+            UpdateUiState.Idle -> ""
+        }
+        if (status.isNotBlank()) {
+            Text(
+                status,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (state is UpdateUiState.CheckFailed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        val s = state
+        when (s) {
+            is UpdateUiState.Available -> {
+                if (s.info.notes.isNotBlank()) Text(s.info.notes, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+                s.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                Button(onClick = { updates.downloadAndInstall() }, modifier = Modifier.padding(top = 8.dp)) { Text("Download and install") }
+            }
+            is UpdateUiState.Downloading -> DownloadProgress(s.downloaded, s.total)
+            is UpdateUiState.ReadyToInstall -> {
+                s.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                Button(onClick = { updates.downloadAndInstall() }, modifier = Modifier.padding(top = 8.dp)) { Text("Install now") }
+            }
+            else -> if (saved) {
+                OutlinedButton(
+                    onClick = { updates.check() },
+                    enabled = s != UpdateUiState.Checking,
+                    modifier = Modifier.padding(top = 8.dp),
+                ) { Text("Check for updates") }
+            }
+        }
+        Text(
+            "Updates install over the current app, so your callers, schedules, settings and permissions stay. No uninstall needed.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+
+        Spacer(Modifier.height(12.dp))
         Text(
             "Phone is stored in a private GitHub repository. Add a read-only token once so the app can check and download its updates automatically.",
             style = MaterialTheme.typography.bodyMedium,
@@ -176,11 +248,10 @@ private fun UpdateAccessSettings() {
         Button(
             onClick = {
                 runCatching {
-                    tokenStore.saveToken(token)
+                    updates.saveToken(token)
                     token = ""
                     saved = true
                     message = "Token saved securely. Checking for updates…"
-                    (context as? MainActivity)?.checkForUpdatesNow()
                 }.onFailure {
                     message = it.message ?: "Could not save the token."
                 }
@@ -207,7 +278,7 @@ private fun UpdateAccessSettings() {
                 color = MaterialTheme.colorScheme.primary,
             )
             TextButton(onClick = {
-                tokenStore.clear()
+                updates.clearToken()
                 saved = false
                 message = "Saved update token removed."
             }) { Text("Remove saved token") }

@@ -21,6 +21,7 @@ import com.callstudio.app.scheduling.AndroidAlarmBackend
 import com.callstudio.app.scheduling.ScheduleCoordinator
 import com.callstudio.app.scheduling.SchedulingEngine
 import com.callstudio.app.session.CallSessionManager
+import com.callstudio.app.update.UpdateController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -55,6 +56,8 @@ class AppContainer(app: Application) {
     val callers = CallerRepository(db.callerDao(), photos, coordinator)
     val recordings = RecordingRepository(app, db.recordingDao())
     val sessions = CallSessionManager(app, appScope, db.callDao(), recordings, settings, notifications, voiceLeases)
+    /** In-app updater: checks GitHub for a newer build and installs it over the current app (no uninstall). */
+    val updates = UpdateController(app, appScope)
     val fakeOutgoingPrefs = FakeOutgoingPrefs(app)
     val fakeOutgoing = FakeOutgoingEngine(
         app, appScope, fakeOutgoingPrefs, settings,

@@ -8,6 +8,7 @@ object RequestCodes {
     const val DECLINE = 3
     const val HANG_UP = 4
     const val MUTE = 5
+    const val MISSED = 6
 
     fun forEvent(eventId: Long, purpose: Int): Int = ((eventId * 8 + purpose) and 0x7FFFFFFFL).toInt()
 }

@@ -2,7 +2,7 @@
 
 CallStudio is a native Android app (Kotlin, Jetpack Compose, Material 3) that creates a **local, call-like experience on your own phone**: custom callers, scheduled "incoming calls", themed ringing and in-call screens, a caller voice clip played on the device, and optional microphone recording.
 
-It does **not** place real calls, contact anyone, or send audio anywhere. There is no server, login or API key. Callers, schedules, settings, recordings and history stay on the device.
+Scheduled, preview and fake calls never place a real phone call: the app has no calling permission (`CALL_PHONE` was removed) and never touches the phone network. The separate **Outgoing** feature is different on purpose: it asks *your own Twilio account* to place a real call from Twilio's cloud, and uploads clips to *your own Cloudinary* account if you configure that. Callers, schedules, settings, recordings and history stay on the device.
 
 > **Build status:** this project was written without access to an Android SDK or the network, so it has **not been compiled or run yet**. The first GitHub Actions run is the first real build. See [Verification status](#verification-status).
 
@@ -10,7 +10,7 @@ It does **not** place real calls, contact anyone, or send audio anywhere. There 
 
 1. Push this project to a GitHub repository (branch `main` or `master`). The workflow in `.github/workflows/android.yml` runs on every push to `main`. You can also start it manually: **Actions** tab → **Android CI** → **Run workflow**.
 2. Open the repository's **Actions** tab and click the most recent **Android CI** run. A green check means unit tests and the build passed. A red cross means something failed: open the failing step for the log.
-3. Easiest download: on the repository's main page open **Releases** (right side on a phone, below "About") and choose **CallStudio debug build (latest)**. Under **Assets** tap **CallStudio-debug.apk**. This copy is replaced on every successful build.
+3. Easiest download: on the repository's main page open **Releases** (right side on a phone, below "About") and choose **Phone debug builds (latest)**. Under **Assets** tap **Phone-debug.apk**. This copy is replaced on every successful build.
 4. Also available when the account has artifact storage left: the run page's **Artifacts** section, **CallStudio-debug-apk** (kept 3 days). Unzip it to get `app-debug.apk`. GitHub's free artifact storage quota fills up quickly, which is why the Releases copy exists.
 5. Open the APK on your phone. If Android asks, allow your browser or file manager to **install unknown apps**, then tap **Install**. This is a debug-signed build for personal use.
 
@@ -25,6 +25,26 @@ Open CallStudio → **Settings → Permissions and setup**. It shows live status
 | Exact timing | Calls ring at the chosen second (Android 12+ special access). Without it Android may deliver a call a few minutes late, and the app says so. | Open settings → allow "alarms & reminders" |
 | Microphone | Only when you tap **Record** during a call. Nothing records on its own. | Asked at that moment |
 | Contacts | Only to copy the photo of the contact you choose. | Asked when you tap Choose from contacts |
+
+## Realistic incoming calls
+
+A scheduled call behaves like a real one, including when the app is closed and the phone is locked:
+
+- **Ringer mode is followed.** Silent: no sound, no vibration. Vibrate: vibration only. Ring: your ringtone, plus vibration if your phone is set to vibrate for calls. Turn this off under **Settings → Audio and ringtone → Ring like a real call** to use the app's own vibration switch instead.
+- **Locked or screen off:** the call takes over the screen (full-screen call screen). While you are using the phone it arrives as a heads-up banner, like a real call. Both use the notification Android shows for calls, on the lock screen as well.
+- **Neon edge glow:** coloured light runs around the screen edge while it rings. Pick Rainbow, Blue, Green, Pink or Off under **Settings → Calls**.
+- **Missed calls:** a call that rings out leaves a "Missed call" notification, like the phone's own.
+- **Reliable timing:** exact-alarm access is granted automatically on Android 13+. For phones that kill background apps, allow **Works when the app is closed** under **Settings → Permissions and setup**.
+
+## Updating the app without uninstalling
+
+Every build from the `master` branch gets a higher version number automatically, so Android installs it **over** the current app. Callers, schedules, settings and permissions stay.
+
+1. One time: **Settings → App updates** → paste a read-only GitHub token (Contents: Read-only, only for this repository) and tap **Save token and check**.
+2. After each commit, once the Android CI run is green, open CallStudio. The Home screen shows **Update available** with the commit message as "what's new" and a **Download and install** button. Tap it, then **Install** on Android's screen.
+3. If Android asks to allow **install unknown apps** for CallStudio, allow it once and come back.
+
+The signing key lives in the `debug-latest` release (`Phone-signing.keystore`). Do not delete that release: a new key would force one uninstall and reinstall.
 
 Contacts: asked only when you tap **Choose from contacts**. Android's picker doesn't share the contact's photo by itself, so the permission is used only to copy the photo of the contact you pick. If you say no, the name and number still import and you can choose a photo yourself.
 

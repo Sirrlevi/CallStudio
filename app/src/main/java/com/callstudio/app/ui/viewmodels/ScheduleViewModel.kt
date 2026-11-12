@@ -99,5 +99,6 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
         if (!SystemAccess.notificationsEnabled(ctx)) add("Notifications are off")
         if (!SystemAccess.fullScreenAllowed(ctx)) add("Full-screen call screen is not allowed")
         if (!SystemAccess.exactAlarmsAllowed(ctx)) add("Exact timing is not allowed")
+        if (!SystemAccess.ignoringBatteryOptimizations(ctx)) add("Battery optimisation can delay calls when the app is closed")
     }
 }

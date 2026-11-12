@@ -73,8 +73,23 @@ fun AudioSettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel())
             RadioRow(st.ringtoneSource == RingtoneSource.SILENT, "No sound", "Vibration only, if enabled") { vm.useSilentRingtone() }
 
             ListItem(
+                headlineContent = { Text("Ring like a real call") },
+                supportingContent = {
+                    Text(
+                        "Follow your phone's mode: Silent makes no sound or vibration, Vibrate only vibrates, " +
+                            "Ring plays the ringtone (and vibrates if your phone does for calls). Turn off to use the vibration switch below instead.",
+                    )
+                },
+                trailingContent = { Switch(checked = st.followPhoneRinger, onCheckedChange = { vm.setFollowPhoneRinger(it) }) },
+            )
+            ListItem(
                 headlineContent = { Text("Vibration") },
-                supportingContent = { Text("Vibrate while the call is ringing") },
+                supportingContent = {
+                    Text(
+                        if (st.followPhoneRinger) "Only used if your phone does not say whether to vibrate for calls"
+                        else "Vibrate while the call is ringing (never in silent mode)",
+                    )
+                },
                 trailingContent = { Switch(checked = st.vibrate, onCheckedChange = { vm.setVibrate(it) }) },
             )
             Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {

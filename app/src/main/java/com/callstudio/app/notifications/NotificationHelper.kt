@@ -60,7 +60,39 @@ class NotificationHelper(private val context: Context, private val photos: Photo
             description = "Shows the call in progress with hang up and mute"
             setShowBadge(false)
         }
-        system.createNotificationChannels(listOf(incoming, backup, ongoing))
+        // Like the phone's own "missed call" notification: normal priority, default notification sound.
+        val missed = NotificationChannel(CHANNEL_MISSED, "Missed calls", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = "Shows a missed-call notification when a call rings out"
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            setShowBadge(true)
+        }
+        system.createNotificationChannels(listOf(incoming, backup, ongoing, missed))
+    }
+
+    /** Same as a real phone: a call that rang out leaves a "Missed call" notification that opens the app. */
+    @SuppressLint("MissingPermission")
+    fun postMissed(eventId: Long, name: String, photoFile: String?) {
+        if (!manager.areNotificationsEnabled()) return
+        val open = PendingIntent.getActivity(
+            context,
+            RequestCodes.forEvent(eventId, RequestCodes.MISSED),
+            Intent(context, com.callstudio.app.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val title = name.ifBlank { "Unknown" }
+        val b = NotificationCompat.Builder(context, CHANNEL_MISSED)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Missed call")
+            .setContentText(title)
+            .setCategory(NotificationCompat.CATEGORY_MISSED_CALL)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setWhen(System.currentTimeMillis())
+            .setShowWhen(true)
+            .setAutoCancel(true)
+            .setContentIntent(open)
+        avatar(photoFile, readBadgeStyle())?.let { b.setLargeIcon(it) }
+        manager.notify(MISSED_ID_BASE + (eventId and 0xFFFL).toInt(), b.build())
     }
 
     fun buildIncoming(s: SessionState, backup: Boolean): Notification {
@@ -232,7 +264,9 @@ class NotificationHelper(private val context: Context, private val photos: Photo
         const val CHANNEL_INCOMING = "incoming_call"
         const val CHANNEL_BACKUP = "incoming_call_backup"
         const val CHANNEL_ONGOING = "ongoing_call"
+        const val CHANNEL_MISSED = "missed_call"
         const val NOTIFICATION_ID = 4101
+        private const val MISSED_ID_BASE = 4200
         const val EXTRA_EVENT_ID = "event_id"
         const val ACTION_DECLINE = "com.callstudio.app.action.DECLINE"
         const val ACTION_END = "com.callstudio.app.action.END"

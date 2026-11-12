@@ -57,6 +57,7 @@ import com.callstudio.app.ui.components.CallerAvatar
 import com.callstudio.app.ui.components.EmptyState
 import com.callstudio.app.ui.components.LoadingBox
 import com.callstudio.app.ui.components.OnResume
+import com.callstudio.app.ui.components.UpdateBanner
 import com.callstudio.app.ui.formatWhen
 import com.callstudio.app.ui.message
 import com.callstudio.app.ui.viewmodels.ScheduleViewModel
@@ -113,6 +114,7 @@ fun DashboardScreen(nav: NavController, vm: ScheduleViewModel = viewModel()) {
                     Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
+                    UpdateBanner(onOpenSettings = { nav.navigate(Routes.SETTINGS) })
                     if (session.isLive) {
                         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {

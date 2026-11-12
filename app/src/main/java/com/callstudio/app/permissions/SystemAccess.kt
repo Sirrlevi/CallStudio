@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -28,6 +29,9 @@ object SystemAccess {
 
     fun exactAlarmsAllowed(ctx: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S || ctx.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
+
+    fun ignoringBatteryOptimizations(ctx: Context): Boolean =
+        ctx.getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(ctx.packageName) ?: true
 
     fun contactsGranted(ctx: Context): Boolean =
         ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
@@ -50,6 +54,19 @@ object SystemAccess {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             start(ctx, Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${ctx.packageName}")))
         } else openAppSettings(ctx)
+    }
+
+    /** Asks Android to stop battery-optimising CallStudio; falls back to the general list if the direct dialog is missing. */
+    @android.annotation.SuppressLint("BatteryLife")
+    fun openBatteryOptimizationSettings(ctx: Context) {
+        try {
+            ctx.startActivity(
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        } catch (e: ActivityNotFoundException) {
+            start(ctx, Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        }
     }
 
     fun openAppSettings(ctx: Context) = start(

@@ -11,6 +11,7 @@ import com.callstudio.app.audio.AudioFiles
 import com.callstudio.app.audio.RingtonePlayer
 import com.callstudio.app.container
 import com.callstudio.app.preferences.AppSettings
+import com.callstudio.app.preferences.EdgeGlowStyle
 import com.callstudio.app.preferences.NotificationBadgeStyle
 import com.callstudio.app.preferences.RingtoneSource
 import com.callstudio.app.preferences.VoicePlayMode
@@ -41,6 +42,8 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setTheme(theme: CallTheme) { viewModelScope.launch { c.settings.setTheme(theme) } }
     fun setVibrate(on: Boolean) { viewModelScope.launch { c.settings.setVibrate(on) } }
+    fun setFollowPhoneRinger(on: Boolean) { viewModelScope.launch { c.settings.setFollowPhoneRinger(on) } }
+    fun setEdgeGlow(style: EdgeGlowStyle) { viewModelScope.launch { c.settings.setEdgeGlow(style) } }
     fun setVoiceMode(mode: VoicePlayMode) { viewModelScope.launch { c.settings.setVoiceMode(mode) } }
     fun setStartOnSpeaker(on: Boolean) { viewModelScope.launch { c.settings.setStartOnSpeaker(on) } }
     fun setKeepScreenOn(on: Boolean) { viewModelScope.launch { c.settings.setKeepScreenOn(on) } }
@@ -83,7 +86,9 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
                 notice = "A call is in progress."
                 return@launch
             }
-            val result = withContext(Dispatchers.IO) { ringPreview.start(st.ringtoneSource, st.ringtoneUri, st.vibrate, loop = true) }
+            val result = withContext(Dispatchers.IO) {
+                ringPreview.start(st.ringtoneSource, st.ringtoneUri, st.vibrate, loop = true, followPhone = st.followPhoneRinger)
+            }
             when (result) {
                 RingtonePlayer.Result.PLAYING, RingtonePlayer.Result.NO_SOUND -> {
                     ringPreviewing = true

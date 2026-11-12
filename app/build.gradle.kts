@@ -5,6 +5,9 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// Bump this by hand for a bigger release. The CI appends the build number to it.
+val baseVersionName = "1.5.0"
+
 android {
     namespace = "com.callstudio.app"
     compileSdk = 35
@@ -13,8 +16,10 @@ android {
         applicationId = "com.callstudio.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.4.2"
+        // CI passes -PciVersionCode / -PciVersionName (a higher number on every build) so Android and the in-app
+        // updater always see a new version and every commit installs over the previous one. Local builds use the base.
+        versionCode = (project.findProperty("ciVersionCode") as String?)?.toIntOrNull() ?: 8
+        versionName = (project.findProperty("ciVersionName") as String?) ?: baseVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

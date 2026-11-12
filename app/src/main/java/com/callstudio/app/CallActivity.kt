@@ -99,6 +99,7 @@ class CallActivity : ComponentActivity() {
                     actions = actions,
                     onMessageAction = { if (it == MessageAction.OPEN_APP_SETTINGS) SystemAccess.openAppSettings(context) },
                     onDismissMessage = { viewModel.clearMessage() },
+                    edgeGlow = s.edgeGlow,
                 )
             }
         }
