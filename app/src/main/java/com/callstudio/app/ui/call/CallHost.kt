@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.callstudio.app.domain.CallStatus
+import com.callstudio.app.preferences.EdgeGlowStyle
 import com.callstudio.app.session.MessageAction
 import com.callstudio.app.session.SessionState
 import com.callstudio.app.ui.theme.CallTheme
@@ -50,6 +51,7 @@ fun CallHost(
     actions: CallActions,
     onMessageAction: (MessageAction) -> Unit,
     onDismissMessage: () -> Unit,
+    edgeGlow: EdgeGlowStyle = EdgeGlowStyle.OFF,
 ) {
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     LaunchedEffect(session.status) {
@@ -95,6 +97,8 @@ fun CallHost(
                 else -> Box(Modifier.fillMaxSize().background(Color.Black))
             }
         }
+        // Edge lighting only while ringing, drawn above the call screen and never intercepting touches.
+        if (session.status == CallStatus.RINGING) EdgeGlow(edgeGlow)
         if (showKeypad && session.status == CallStatus.ACTIVE) KeypadDialog { showKeypad = false }
         val message = session.message
         if (message != null) {

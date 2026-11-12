@@ -18,6 +18,7 @@ import com.callstudio.app.outgoing.TwimlBuilder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -138,7 +140,18 @@ class OutgoingViewModel(app: Application) : AndroidViewModel(app) {
                 val urls = uploadClips(s)
                 _ui.update { it.copy(phase = OutgoingPhase.DIALING, progressText = null, statusText = "Calling…") }
                 val script = TwimlBuilder.build(urls, if (u.connectLive) s.myNumber.trim() else null)
-                val sid = twilio.startCall(to, script)
+                // The request to Twilio can't be interrupted half-way. If Cancel is pressed while it is in flight the call
+                // already exists on Twilio's side, so it is ended right away instead of being left running unseen.
+                val me = coroutineContext.job
+                val sid = withContext(NonCancellable) {
+                    val created = twilio.startCall(to, script)
+                    if (me.isCancelled) {
+                        runCatching { twilio.hangUp(created) }
+                        null
+                    } else {
+                        created
+                    }
+                } ?: return@launch
                 _ui.update { it.copy(phase = OutgoingPhase.ACTIVE, callSid = sid) }
                 watch(twilio, sid)
             } catch (e: CancellationException) {

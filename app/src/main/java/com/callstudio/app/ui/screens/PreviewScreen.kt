@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.callstudio.app.ui.call.ControlSpec
+import com.callstudio.app.ui.call.EdgeGlow
 import com.callstudio.app.ui.call.InCallModel
 import com.callstudio.app.ui.call.InCallScreen
 import com.callstudio.app.ui.call.IncomingActions
@@ -76,6 +77,7 @@ fun PreviewScreen(nav: NavController, callerId: Long, vm: PreviewViewModel = vie
             Box(Modifier.fillMaxSize()) {
                 if (!vm.inCall) {
                     IncomingCallScreen(s.theme, caller, IncomingActions(onAnswer = { vm.answer() }, onDecline = leave))
+                    EdgeGlow(s.edgeGlow)
                 } else {
                     val controls = buildList {
                         add(ControlSpec("speaker", "Speaker", Icons.Filled.VolumeUp, vm.speakerOn, onClick = { vm.toggleSpeaker() }))

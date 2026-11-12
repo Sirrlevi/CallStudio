@@ -99,6 +99,7 @@ class CallSessionManager(
             if (e.status != CallStatus.SCHEDULED.name) return
             if (_session.value.isLive) {
                 closeEvent(e, CallStatus.MISSED, "Another call was in progress")
+                notifications.postMissed(e.id, e.callerName, e.callerPhotoFile)
                 return
             }
             try {
@@ -150,7 +151,9 @@ class CallSessionManager(
         if (_session.value.status != CallStatus.RINGING || ringingStarted) return
         ringingStarted = true
         val st = settings.current()
-        withContext(Dispatchers.IO) { ringtone.start(st.ringtoneSource, st.ringtoneUri, st.vibrate, loop = true) }
+        withContext(Dispatchers.IO) {
+            ringtone.start(st.ringtoneSource, st.ringtoneUri, st.vibrate, loop = true, followPhone = st.followPhoneRinger)
+        }
     }
 
     fun onServiceFailed() {
@@ -272,6 +275,7 @@ class CallSessionManager(
         heldRecordingWasRunning = false
         _session.value = SessionState()
         notifications.cancelAll()
+        if (status == CallStatus.MISSED) notifications.postMissed(s.eventId, s.displayName, s.callerPhotoFile)
     }
 
     private suspend fun closeEvent(e: CallEventEntity, status: CallStatus, reason: String) {

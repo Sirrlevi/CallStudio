@@ -57,7 +57,9 @@ class PreviewViewModel(app: Application) : AndroidViewModel(app) {
         ringing = true
         viewModelScope.launch {
             val st = c.settings.current()
-            withContext(Dispatchers.IO) { ringtone.start(st.ringtoneSource, st.ringtoneUri, st.vibrate, loop = true) }
+            withContext(Dispatchers.IO) {
+                ringtone.start(st.ringtoneSource, st.ringtoneUri, st.vibrate, loop = true, followPhone = st.followPhoneRinger)
+            }
             if (!ringing) ringtone.stop()
         }
     }

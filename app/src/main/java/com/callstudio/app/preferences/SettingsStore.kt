@@ -33,6 +33,8 @@ class SettingsStore(private val context: Context) {
         val SAMPLE_RATE = intPreferencesKey("recording_sample_rate")
         val NOTIFICATION_BADGE = stringPreferencesKey("notification_badge_style")
         val LAST_CALLER = longPreferencesKey("last_caller_id")
+        val FOLLOW_PHONE_RINGER = booleanPreferencesKey("follow_phone_ringer")
+        val EDGE_GLOW = stringPreferencesKey("edge_glow")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data
@@ -52,6 +54,8 @@ class SettingsStore(private val context: Context) {
                 recordingSampleRate = p[K.SAMPLE_RATE] ?: d.recordingSampleRate,
                 notificationBadgeStyle = parse(p[K.NOTIFICATION_BADGE], d.notificationBadgeStyle),
                 lastCallerId = p[K.LAST_CALLER] ?: d.lastCallerId,
+                followPhoneRinger = p[K.FOLLOW_PHONE_RINGER] ?: d.followPhoneRinger,
+                edgeGlow = parse(p[K.EDGE_GLOW], d.edgeGlow),
             )
         }
 
@@ -68,6 +72,8 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun setVibrate(on: Boolean) { context.dataStore.edit { it[K.VIBRATE] = on } }
+    suspend fun setFollowPhoneRinger(on: Boolean) { context.dataStore.edit { it[K.FOLLOW_PHONE_RINGER] = on } }
+    suspend fun setEdgeGlow(style: EdgeGlowStyle) { context.dataStore.edit { it[K.EDGE_GLOW] = style.name } }
 
     suspend fun setVoiceMode(mode: VoicePlayMode) { context.dataStore.edit { it[K.VOICE_MODE] = mode.name } }
     suspend fun setStartOnSpeaker(on: Boolean) { context.dataStore.edit { it[K.START_ON_SPEAKER] = on } }

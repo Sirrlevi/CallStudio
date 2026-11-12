@@ -16,7 +16,8 @@ import com.callstudio.app.preferences.RingtoneSource
 
 /**
  * Plays the incoming-call ringtone and vibration. Kept separate from caller-voice playback.
- * Respects the phone's ringer mode: in silent mode nothing sounds, in vibrate mode only vibration runs.
+ * Respects the phone's ringer mode like a real call: silent = nothing, vibrate = vibration only,
+ * normal = ringtone (plus vibration when the phone's "vibrate when ringing" is on).
  */
 class RingtonePlayer(private val context: Context) {
     enum class Result { PLAYING, SILENT_MODE, NO_SOUND, FAILED }
@@ -33,10 +34,23 @@ class RingtonePlayer(private val context: Context) {
 
     /** Blocking (prepares the file); call from a background dispatcher. */
     @Synchronized
-    fun start(source: RingtoneSource, uri: String?, vibrate: Boolean, loop: Boolean): Result {
+    fun start(
+        source: RingtoneSource,
+        uri: String?,
+        vibrate: Boolean,
+        loop: Boolean,
+        followPhone: Boolean = true,
+    ): Result {
         stop()
         val ringerMode = audio.ringerMode
-        if (vibrate && ringerMode != AudioManager.RINGER_MODE_SILENT) startVibration(loop)
+        val shouldVibrate = when {
+            ringerMode == AudioManager.RINGER_MODE_SILENT -> false
+            // Same as a real call: a phone on vibrate always vibrates for incoming calls.
+            followPhone && ringerMode == AudioManager.RINGER_MODE_VIBRATE -> true
+            followPhone -> phoneVibratesWhenRinging(default = vibrate)
+            else -> vibrate
+        }
+        if (shouldVibrate) startVibration(loop)
         if (source == RingtoneSource.SILENT) return Result.NO_SOUND
         if (ringerMode != AudioManager.RINGER_MODE_NORMAL) return Result.SILENT_MODE
         requestFocus()
@@ -57,6 +71,15 @@ class RingtonePlayer(private val context: Context) {
         runCatching { vibrator?.cancel() }
         vibrator = null
         abandonFocus()
+    }
+
+    /** The phone's own "vibrate when ringing / also vibrate for calls" switch; [default] if this phone doesn't expose it. */
+    private fun phoneVibratesWhenRinging(default: Boolean): Boolean {
+        val value = runCatching {
+            // The constant is hidden in the SDK, but the setting itself is readable by any app.
+            Settings.System.getInt(context.contentResolver, "vibrate_when_ringing", -1)
+        }.getOrDefault(-1)
+        return if (value < 0) default else value != 0
     }
 
     private fun candidates(source: RingtoneSource, uri: String?): List<Uri> {

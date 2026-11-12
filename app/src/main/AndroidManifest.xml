@@ -10,6 +10,10 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <!-- Exact timing for scheduled calls (special access on Android 12+). -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Android 13+: granted automatically at install, so a scheduled call is on time without any settings step. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Lets the user exempt CallStudio from battery optimisation so phone makers' task killers don't delay calls. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Re-arm scheduled calls after a restart. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -23,8 +27,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Earpiece / speaker routing during a call. -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <!-- Requested at runtime only when the user explicitly starts an outgoing SIM call. -->
-    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <!-- CallStudio never places a real SIM call, so it does not ask for CALL_PHONE. -->
 
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />

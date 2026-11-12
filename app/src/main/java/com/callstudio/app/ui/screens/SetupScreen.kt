@@ -64,6 +64,7 @@ fun SetupScreen(nav: NavController) {
         val notificationsOn = SystemAccess.notificationsEnabled(ctx)
         val fullScreen = SystemAccess.fullScreenAllowed(ctx)
         val exact = SystemAccess.exactAlarmsAllowed(ctx)
+        val battery = SystemAccess.ignoringBatteryOptimizations(ctx)
         listOf(
             SetupItem(
                 "Notifications",
@@ -92,6 +93,14 @@ fun SetupScreen(nav: NavController) {
                 { SystemAccess.openExactAlarmSettings(ctx) },
             ),
             SetupItem(
+                "Works when the app is closed",
+                if (battery) "Allowed. Scheduled calls arrive even when CallStudio is closed and the phone is locked."
+                else "Battery optimisation is on. Some phones then delay or block calls while the app is closed. Allow it so calls arrive on time.",
+                if (battery) Status.OK else Status.NEEDS_ACTION,
+                if (battery) null else "Allow background",
+                { SystemAccess.openBatteryOptimizationSettings(ctx) },
+            ),
+            SetupItem(
                 "Microphone",
                 if (SystemAccess.micGranted(ctx)) "Allowed. Recording starts only when you tap Record."
                 else "Asked the first time you tap Record during a call. Nothing records on its own.",
@@ -110,7 +119,7 @@ fun SetupScreen(nav: NavController) {
             ),
             SetupItem(
                 "Silent mode and Do Not Disturb",
-                "CallStudio follows them. In silent mode a call appears without sound, and Do Not Disturb may hide it.",
+                "CallStudio rings like a real call. Silent: no sound or vibration. Vibrate: vibration only. Ring: your ringtone, plus vibration if your phone vibrates for calls. Do Not Disturb may hide it, as it does real calls.",
                 Status.INFO,
             ),
             SetupItem(
