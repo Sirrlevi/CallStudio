@@ -214,7 +214,8 @@ fun ScheduleScreen(
                 when (val o = vm.schedule(c, s, if (editing) eventId else null, clip)) {
                     is ScheduleCoordinator.Outcome.Rejected -> error = o.problem.message()
                     is ScheduleCoordinator.Outcome.Scheduled -> {
-                        val note = if (o.exact) "" else " Exact timing is off, so it may arrive a few minutes late."
+                        val note = (if (o.exact) "" else " Exact timing is off, so it may arrive a few minutes late.") +
+                            (SystemAccess.quietHint(ctx)?.let { " $it" } ?: "")
                         Toast.makeText(ctx, "Call set for ${formatWhen(o.event.triggerAtMillis)}.$note", Toast.LENGTH_LONG).show()
                         nav.popBackStack()
                     }

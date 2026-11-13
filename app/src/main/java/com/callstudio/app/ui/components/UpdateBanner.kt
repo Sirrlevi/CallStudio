@@ -16,7 +16,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -34,7 +33,7 @@ import com.callstudio.app.update.UpdateUiState
  * and "install now". Shows nothing when the app is up to date.
  */
 @Composable
-fun UpdateBanner(onOpenSettings: () -> Unit, modifier: Modifier = Modifier) {
+fun UpdateBanner(modifier: Modifier = Modifier) {
     val updates = LocalContext.current.container.updates
     val state by updates.state.collectAsStateWithLifecycle()
 
@@ -59,10 +58,6 @@ fun UpdateBanner(onOpenSettings: () -> Unit, modifier: Modifier = Modifier) {
             Button(onClick = { updates.downloadAndInstall() }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
                 Text("Install now")
             }
-        }
-        UpdateUiState.NotConfigured -> BannerCard(modifier) {
-            BannerHeader("Updates are not set up", "Add a GitHub token once to get new versions inside the app.")
-            TextButton(onClick = onOpenSettings) { Text("Set up updates") }
         }
         else -> Unit
     }

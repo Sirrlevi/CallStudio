@@ -50,6 +50,7 @@ import com.callstudio.app.CallActivity
 import com.callstudio.app.data.CallerEntity
 import com.callstudio.app.data.displayNumber
 import com.callstudio.app.domain.ScheduleSpec
+import com.callstudio.app.permissions.SystemAccess
 import com.callstudio.app.scheduling.ScheduleCoordinator
 import com.callstudio.app.ui.Routes
 import com.callstudio.app.ui.components.AppTopBar
@@ -103,7 +104,8 @@ fun DashboardScreen(nav: NavController, vm: ScheduleViewModel = viewModel()) {
                 fun quick(spec: ScheduleSpec) {
                     scope.launch {
                         val msg = when (val o = vm.schedule(selected, spec, null)) {
-                            is ScheduleCoordinator.Outcome.Scheduled -> "Call set for ${formatWhen(o.event.triggerAtMillis)}"
+                            is ScheduleCoordinator.Outcome.Scheduled ->
+                                "Call set for ${formatWhen(o.event.triggerAtMillis)}" + (SystemAccess.quietHint(ctx)?.let { ". $it" } ?: "")
                             is ScheduleCoordinator.Outcome.Rejected -> o.problem.message()
                         }
                         snackbar.showSnackbar(msg)
@@ -114,7 +116,7 @@ fun DashboardScreen(nav: NavController, vm: ScheduleViewModel = viewModel()) {
                     Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    UpdateBanner(onOpenSettings = { nav.navigate(Routes.SETTINGS) })
+                    UpdateBanner()
                     if (session.isLive) {
                         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {

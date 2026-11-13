@@ -87,10 +87,19 @@ fun AppNav() {
                         NavigationBarItem(
                             selected = route == item.route,
                             onClick = {
-                                nav.navigate(item.route) {
-                                    popUpTo(Routes.DASHBOARD) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
+                                if (item.route == Routes.DASHBOARD) {
+                                    // Home is the first screen of the app, so going home is "go back to it", not
+                                    // "open it again". Falls back to opening it if it is somehow not on the stack.
+                                    val backHome = nav.popBackStack(Routes.DASHBOARD, inclusive = false, saveState = true)
+                                    if (!backHome && route != Routes.DASHBOARD) {
+                                        nav.navigate(Routes.DASHBOARD) { launchSingleTop = true }
+                                    }
+                                } else {
+                                    nav.navigate(item.route) {
+                                        popUpTo(Routes.DASHBOARD) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 }
                             },
                             icon = { Icon(item.icon, contentDescription = null) },

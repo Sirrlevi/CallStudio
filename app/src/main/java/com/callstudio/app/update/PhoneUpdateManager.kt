@@ -21,6 +21,33 @@ data class PhoneUpdateInfo(
     val sizeBytes: Long = 0L,
 )
 
+/** Which GitHub request failed; the same HTTP status means different things at each step. */
+enum class Stage { REPOSITORY, RELEASE, FILE }
+
+/**
+ * Turns a GitHub error into one sentence that says what to change. [githubMessage] is GitHub's own explanation
+ * (the "message" field of its JSON error), appended so nothing is hidden.
+ */
+fun updateErrorMessage(status: Int, stage: Stage, githubMessage: String = ""): String {
+    val text = when {
+        status == 401 ->
+            "GitHub says this token isn't valid. It may have expired, been revoked, or been pasted with a character missing. Create a new token and paste it again."
+        status == 404 && stage == Stage.REPOSITORY ->
+            "This token can't see Sirrlevi/CallStudio. When creating the token, set Resource owner to Sirrlevi and Repository access to Only select repositories, then choose CallStudio."
+        status == 404 && stage == Stage.RELEASE ->
+            "The token works, but there is no \"debug-latest\" release yet. It appears once a build has finished on master."
+        status == 404 ->
+            "GitHub couldn't find the update file. A new build may still be uploading; try again in a minute."
+        status == 403 && githubMessage.contains("rate limit", ignoreCase = true) ->
+            "GitHub's request limit was reached. Try again in a few minutes."
+        status == 403 ->
+            "The token can see the repository but isn't allowed to read its releases. Edit the token and set Repository permissions > Contents to Read-only."
+        else -> "GitHub update request failed ($status)."
+    }
+    val extra = githubMessage.trim().take(160)
+    return if (extra.isEmpty()) text else "$text (GitHub says: $extra)"
+}
+
 /** Authenticated release checker/downloader for the private Sirrlevi/CallStudio repository. */
 class PhoneUpdateManager(private val context: Context) {
     fun installedVersionName(): String =
@@ -34,11 +61,16 @@ class PhoneUpdateManager(private val context: Context) {
 
     /** Returns the newer release, or null when this install is already the latest. */
     fun checkForUpdate(token: String): PhoneUpdateInfo? {
+        // Step 1: can this token see the repository at all? A failure here means the token itself is the problem,
+        // which is a different fix from "the release isn't there yet" or "the token can't read releases".
+        requestBytes("$API/repos/$OWNER/$REPOSITORY", token, "application/vnd.github+json", Stage.REPOSITORY)
+        // Step 2: the release that holds the latest build.
         val releaseJson = JSONObject(
             requestBytes(
                 "$API/repos/$OWNER/$REPOSITORY/releases/tags/$RELEASE_TAG",
                 token,
                 "application/vnd.github+json",
+                Stage.RELEASE,
             ).toString(Charsets.UTF_8),
         )
         val assets = releaseJson.getJSONArray("assets")
@@ -62,6 +94,7 @@ class PhoneUpdateManager(private val context: Context) {
                 "$API/repos/$OWNER/$REPOSITORY/releases/assets/$metaId",
                 token,
                 "application/octet-stream",
+                Stage.FILE,
             ).toString(Charsets.UTF_8),
         )
         if (metadata.optString("packageName") != context.packageName) {
@@ -94,6 +127,7 @@ class PhoneUpdateManager(private val context: Context) {
             "$API/repos/$OWNER/$REPOSITORY/releases/assets/${update.apkAssetId}",
             token,
             "application/octet-stream",
+            Stage.FILE,
         )
         try {
             val length = connection.contentLengthLong
@@ -140,8 +174,8 @@ class PhoneUpdateManager(private val context: Context) {
         File(context.cacheDir, UPDATE_DIR).listFiles()?.forEach { it.delete() }
     }
 
-    private fun requestBytes(url: String, token: String, accept: String): ByteArray {
-        val connection = openFollowing(url, token, accept)
+    private fun requestBytes(url: String, token: String, accept: String, stage: Stage): ByteArray {
+        val connection = openFollowing(url, token, accept, stage)
         try {
             return connection.inputStream.use { it.readBytes() }
         } finally {
@@ -154,7 +188,7 @@ class PhoneUpdateManager(private val context: Context) {
      * pre-signed download URL on another host; the token must not be sent there (the storage host rejects it).
      * Returns a connection whose response is already known to be 2xx.
      */
-    private fun openFollowing(startUrl: String, token: String, accept: String): HttpURLConnection {
+    private fun openFollowing(startUrl: String, token: String, accept: String, stage: Stage): HttpURLConnection {
         var current = URL(startUrl)
         var sendToken = true
         for (hop in 0..MAX_REDIRECTS) {
@@ -171,7 +205,7 @@ class PhoneUpdateManager(private val context: Context) {
                 continue
             }
             if (status !in 200..299) {
-                val error = httpError(connection, status)
+                val error = httpError(connection, status, stage)
                 connection.disconnect()
                 throw error
             }
@@ -193,14 +227,10 @@ class PhoneUpdateManager(private val context: Context) {
         }
     }
 
-    private fun httpError(connection: HttpURLConnection, status: Int): IOException {
-        val detail = runCatching { connection.errorStream?.bufferedReader()?.use { it.readText() } }.getOrNull()
-        return IOException(
-            when (status) {
-                401, 403, 404 -> "GitHub couldn't access the private Phone release. Check that your fine-grained token has Contents: Read-only for Sirrlevi/CallStudio."
-                else -> "GitHub update request failed ($status). ${detail.orEmpty().take(180)}"
-            },
-        )
+    private fun httpError(connection: HttpURLConnection, status: Int, stage: Stage): IOException {
+        val body = runCatching { connection.errorStream?.bufferedReader()?.use { it.readText() } }.getOrNull().orEmpty()
+        val github = runCatching { JSONObject(body).optString("message") }.getOrDefault("").trim()
+        return IOException(updateErrorMessage(status, stage, github))
     }
 
     private fun sha256(file: File): String {

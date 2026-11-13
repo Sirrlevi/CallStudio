@@ -10,6 +10,7 @@ import android.util.Log
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.callstudio.app.CallStudioApp
+import com.callstudio.app.diag.CallDiagnostics
 import com.callstudio.app.domain.CallStatus
 import com.callstudio.app.notifications.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
@@ -62,16 +63,28 @@ class CallService : Service() {
 
     private fun refresh() {
         val s = sessions.session.value
-        if (!s.isLive) shutDown() else promote(microphone = s.recording.isActive)
+        if (!s.isLive) {
+            shutDown()
+        } else if (!promote(microphone = s.recording.isActive) && s.status == CallStatus.RINGING) {
+            sessions.onServiceFailed()
+        }
     }
 
     /** Shows the right notification and declares the foreground-service types that are currently legal. */
     private fun promote(microphone: Boolean): Boolean {
         val s = sessions.session.value
-        val notification = when (s.status) {
-            CallStatus.RINGING -> notifications.buildIncoming(s, backup = false)
-            CallStatus.ACTIVE -> notifications.buildOngoing(s)
-            else -> notifications.buildEnded()
+        val notification = try {
+            when (s.status) {
+                // Keeps the "backup" (system ringtone) version when the app's own ringtone had to be replaced.
+                CallStatus.RINGING -> notifications.buildIncoming(s, backup = sessions.systemRing)
+                CallStatus.ACTIVE -> notifications.buildOngoing(s)
+                else -> notifications.buildEnded()
+            }
+        } catch (e: Exception) {
+            // Android kills a service that was started as a foreground service and never shows a notification.
+            Log.e(TAG, "Could not build the call notification", e)
+            CallDiagnostics.log("Call notification could not be built", "${e.javaClass.simpleName}: ${e.message}")
+            notifications.buildEnded()
         }
         var type = 0
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -85,6 +98,7 @@ class CallService : Service() {
             true
         } catch (e: Exception) {
             Log.w(TAG, "startForeground was refused", e)
+            CallDiagnostics.log("Ringing service was refused by Android", "${e.javaClass.simpleName}: ${e.message}")
             false
         }
     }

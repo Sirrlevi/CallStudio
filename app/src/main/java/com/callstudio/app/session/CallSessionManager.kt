@@ -11,6 +11,7 @@ import com.callstudio.app.audio.VoiceState
 import com.callstudio.app.data.CallDao
 import com.callstudio.app.data.CallEventEntity
 import com.callstudio.app.data.RecordingRepository
+import com.callstudio.app.diag.CallDiagnostics
 import com.callstudio.app.domain.CallEvent
 import com.callstudio.app.domain.CallStateMachine
 import com.callstudio.app.domain.CallStatus
@@ -62,6 +63,14 @@ class CallSessionManager(
 
     private var ringTimeoutJob: Job? = null
     private var ringingStarted = false
+
+    /**
+     * True while the phone's own notification sound is doing the ringing because the app's ringtone could not
+     * (see [switchToSystemRing]). The foreground service reads it so it keeps posting the same kind of notification.
+     */
+    @Volatile
+    var systemRing: Boolean = false
+        private set
     private var heldClipWasPlaying = false
     private var heldRecordingWasRunning = false
 
@@ -95,9 +104,17 @@ class CallSessionManager(
     suspend fun onAlarm(eventId: Long) {
         gate.await()
         mutex.withLock {
-            val e = calls.get(eventId) ?: return
-            if (e.status != CallStatus.SCHEDULED.name) return
+            val e = calls.get(eventId)
+            if (e == null) {
+                CallDiagnostics.log("Alarm ignored", "event $eventId no longer exists")
+                return
+            }
+            if (e.status != CallStatus.SCHEDULED.name) {
+                CallDiagnostics.log("Alarm ignored", "event $eventId is already ${e.status}")
+                return
+            }
             if (_session.value.isLive) {
+                CallDiagnostics.log("Call missed", "event $eventId came while another call was in progress")
                 closeEvent(e, CallStatus.MISSED, "Another call was in progress")
                 notifications.postMissed(e.id, e.callerName, e.callerPhotoFile)
                 return
@@ -108,7 +125,11 @@ class CallSessionManager(
                 throw t
             } catch (t: Throwable) {
                 Log.e(TAG, "Couldn't start the call", t)
+                CallDiagnostics.log("Call could not start", "${t.javaClass.simpleName}: ${t.message}")
                 closeEvent(e, CallStatus.ERROR, "Couldn't start the call")
+                ringtone.stop()
+                ringingStarted = false
+                systemRing = false
                 _session.value = SessionState()
                 notifications.cancelAll()
             }
@@ -118,8 +139,15 @@ class CallSessionManager(
     private suspend fun startRinging(e: CallEventEntity) {
         if (CallStateMachine.next(CallStatus.SCHEDULED, CallEvent.FIRE) != CallStatus.RINGING) return
         calls.update(e.copy(status = CallStatus.RINGING.name))
-        settings.setLastCaller(e.callerId)
+        try {
+            settings.setLastCaller(e.callerId)
+        } catch (c: CancellationException) {
+            throw c
+        } catch (t: Exception) {
+            Log.w(TAG, "Could not remember the last caller", t)
+        }
         ringingStarted = false
+        systemRing = false
         _session.value = SessionState(
             eventId = e.id,
             callerId = e.callerId,
@@ -133,7 +161,19 @@ class CallSessionManager(
         )
         heldClipWasPlaying = false
         heldRecordingWasRunning = false
-        if (!CallService.start(app)) notifications.postBackupIncoming(_session.value)
+
+        // Three independent things, so one of them failing never leaves the call silent and invisible:
+        // 1) show the call (lock screen, heads-up, full screen) right now, without waiting for any service,
+        val shown = notifications.postIncoming(_session.value)
+        // 2) keep the app alive in the foreground while it rings,
+        val serviceStarted = CallService.start(app)
+        CallDiagnostics.log(
+            "Call is ringing",
+            "event=${e.id} late=${(System.currentTimeMillis() - e.triggerAtMillis) / 1000}s notification=${if (shown) "shown" else "NOT shown"} " +
+                "service=${if (serviceStarted) "started" else "REFUSED"} ${systemState()}",
+        )
+        // 3) ring and vibrate right now, in the way this phone rings for a real call.
+        if (serviceStarted) startRingtoneLocked() else switchToSystemRing("Android refused to start the ringing service")
         val timeout = settings.current().ringTimeoutSeconds * 1000L
         ringTimeoutJob?.cancel()
         ringTimeoutJob = scope.launch {
@@ -148,18 +188,34 @@ class CallSessionManager(
     }
 
     private suspend fun startRingtoneLocked() {
-        if (_session.value.status != CallStatus.RINGING || ringingStarted) return
+        if (_session.value.status != CallStatus.RINGING || ringingStarted || systemRing) return
         ringingStarted = true
         val st = settings.current()
-        withContext(Dispatchers.IO) {
+        val result = withContext(Dispatchers.IO) {
             ringtone.start(st.ringtoneSource, st.ringtoneUri, st.vibrate, loop = true, followPhone = st.followPhoneRinger)
         }
+        CallDiagnostics.log("Ringing", "${result.name.lowercase()} - ${ringtone.lastReport}")
+        // Only a real failure falls back to the phone's own notification sound; silent / vibrate mode is not a failure.
+        if (result == RingtonePlayer.Result.FAILED) switchToSystemRing("the ringtone could not be played")
+    }
+
+    /**
+     * Last line of defence: let Android itself ring through the "backup" notification (default ringtone, repeating
+     * until answered). The system plays it from its own process, so it still works when ours is restricted.
+     */
+    private fun switchToSystemRing(reason: String) {
+        if (systemRing || _session.value.status != CallStatus.RINGING) return
+        systemRing = true
+        ringingStarted = true
+        ringtone.stop()
+        val shown = notifications.postBackupIncoming(_session.value)
+        CallDiagnostics.log("Using the phone's own notification sound", "$reason; notification=${if (shown) "shown" else "NOT shown"}")
     }
 
     fun onServiceFailed() {
         scope.launch {
             mutex.withLock {
-                if (_session.value.status == CallStatus.RINGING) notifications.postBackupIncoming(_session.value)
+                if (_session.value.status == CallStatus.RINGING) switchToSystemRing("Android refused to run the ringing service")
             }
         }
     }
@@ -169,7 +225,14 @@ class CallSessionManager(
         scope.launch {
             mutex.withLock {
                 if (_session.value.status == CallStatus.RINGING && !CallService.isRunning) {
-                    notifications.cancelAll()
+                    if (systemRing) {
+                        // The app is on screen now, so it may run its own ringer again instead of the system fallback.
+                        // Cancelling the backup notification also stops its repeating sound.
+                        systemRing = false
+                        ringingStarted = false
+                        notifications.cancelAll()
+                        notifications.postIncoming(_session.value)
+                    }
                     if (!CallService.start(app)) startRingtoneLocked()
                 }
             }
@@ -205,6 +268,7 @@ class CallSessionManager(
         ringTimeoutJob = null
         ringtone.stop()
         ringingStarted = false
+        systemRing = false
         notifications.cancelAll()
         val now = System.currentTimeMillis()
         calls.get(eventId)?.let { calls.update(it.copy(status = next.name, answeredAtMillis = now)) }
@@ -263,6 +327,7 @@ class CallSessionManager(
         ringTimeoutJob = null
         ringtone.stop()
         ringingStarted = false
+        systemRing = false
         val rec = recorder.state.value
         if (rec.isActive || rec is RecorderState.Error) finalizeRecording(null)
         voice.release()
@@ -450,6 +515,15 @@ class CallSessionManager(
     // ---- messages ----------------------------------------------------------------------------------------
 
     private fun setMessage(message: UiMessage) { _session.update { it.copy(message = message) } }
+
+    /** One line about the phone's call-related settings, for the call report in Settings. */
+    private fun systemState(): String =
+        "notifications=${if (SystemAccess.notificationsEnabled(app)) "on" else "OFF"} " +
+            "alerts=${notifications.incomingChannelState()} " +
+            "fullScreen=${if (SystemAccess.fullScreenAllowed(app)) "yes" else "NO"} " +
+            "exactAlarms=${if (SystemAccess.exactAlarmsAllowed(app)) "yes" else "NO"} " +
+            "batteryUnrestricted=${if (SystemAccess.ignoringBatteryOptimizations(app)) "yes" else "no"} " +
+            "android=${android.os.Build.VERSION.SDK_INT}"
 
     fun clearMessage() { _session.update { it.copy(message = null) } }
 
