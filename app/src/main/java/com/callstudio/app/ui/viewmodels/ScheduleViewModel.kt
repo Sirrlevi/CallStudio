@@ -97,8 +97,8 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
     /** Human-readable list of things that would stop calls from showing up properly. */
     fun setupGaps(): List<String> = buildList {
         if (!SystemAccess.notificationsEnabled(ctx)) add("Notifications are off")
+        else if (!c.notifications.incomingChannelAllowsPopUp()) add("Incoming-call alerts are turned down in Android settings")
         if (!SystemAccess.fullScreenAllowed(ctx)) add("Full-screen call screen is not allowed")
         if (!SystemAccess.exactAlarmsAllowed(ctx)) add("Exact timing is not allowed")
-        if (!SystemAccess.ignoringBatteryOptimizations(ctx)) add("Battery optimisation can delay calls when the app is closed")
     }
 }

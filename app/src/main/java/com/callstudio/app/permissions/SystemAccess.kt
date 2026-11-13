@@ -7,6 +7,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
@@ -38,6 +39,40 @@ object SystemAccess {
 
     fun micGranted(ctx: Context): Boolean =
         ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+    /** What a real call would do right now, before Do Not Disturb: "Ring", "Vibrate" or "Silent". */
+    fun ringerModeLabel(ctx: Context): String =
+        when (runCatching { ctx.getSystemService(AudioManager::class.java).ringerMode }.getOrDefault(AudioManager.RINGER_MODE_NORMAL)) {
+            AudioManager.RINGER_MODE_SILENT -> "Silent"
+            AudioManager.RINGER_MODE_VIBRATE -> "Vibrate"
+            else -> "Ring"
+        }
+
+    /** Null when Do Not Disturb is off, otherwise a short description of how strict it is. */
+    fun doNotDisturbLabel(ctx: Context): String? =
+        when (runCatching { ctx.getSystemService(NotificationManager::class.java).currentInterruptionFilter }.getOrDefault(NotificationManager.INTERRUPTION_FILTER_UNKNOWN)) {
+            NotificationManager.INTERRUPTION_FILTER_PRIORITY -> "Do Not Disturb (priority only)"
+            NotificationManager.INTERRUPTION_FILTER_ALARMS -> "Do Not Disturb (alarms only)"
+            NotificationManager.INTERRUPTION_FILTER_NONE -> "Do Not Disturb (total silence)"
+            else -> null
+        }
+
+    /** Why a call may stay quiet right now (shown when scheduling), or null when nothing is in the way. */
+    fun quietHint(ctx: Context): String? {
+        val dnd = doNotDisturbLabel(ctx)
+        return when {
+            dnd != null -> "$dnd is on, so the call may stay silent, like a real call from a number you haven't allowed."
+            ringerModeLabel(ctx) == "Silent" -> "The phone is on silent, so it won't ring."
+            else -> null
+        }
+    }
+
+    fun openChannelSettings(ctx: Context, channelId: String) = start(
+        ctx,
+        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+            .putExtra(Settings.EXTRA_CHANNEL_ID, channelId),
+    )
 
     fun openNotificationSettings(ctx: Context) = start(
         ctx,

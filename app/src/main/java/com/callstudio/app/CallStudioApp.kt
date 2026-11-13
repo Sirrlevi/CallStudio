@@ -12,6 +12,7 @@ import com.callstudio.app.preferences.RingtoneSource
 import com.callstudio.app.data.CallerRepository
 import com.callstudio.app.data.PhotoStore
 import com.callstudio.app.data.RecordingRepository
+import com.callstudio.app.diag.CallDiagnostics
 import com.callstudio.app.fakeout.FakeOutgoingEngine
 import com.callstudio.app.fakeout.FakeOutgoingPrefs
 import com.callstudio.app.notifications.NotificationHelper
@@ -22,6 +23,7 @@ import com.callstudio.app.scheduling.ScheduleCoordinator
 import com.callstudio.app.scheduling.SchedulingEngine
 import com.callstudio.app.session.CallSessionManager
 import com.callstudio.app.update.UpdateController
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,13 +35,22 @@ class CallStudioApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CallDiagnostics.init(this)
+        CallDiagnostics.log("App process started")
         container = AppContainer(this)
         container.start()
     }
 }
 
 class AppContainer(app: Application) {
-    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    val appScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate +
+            CoroutineExceptionHandler { _, t ->
+                // One failed background task must not take the whole app (and a ringing call) down with it.
+                Log.e("CallStudio", "Unhandled error in a background task", t)
+                CallDiagnostics.log("Unexpected error", "${t.javaClass.simpleName}: ${t.message}")
+            },
+    )
     val db: AppDatabase = Room.databaseBuilder(app, AppDatabase::class.java, "callstudio.db")
         .addMigrations(Migrations.V1_TO_V2)
         .build()

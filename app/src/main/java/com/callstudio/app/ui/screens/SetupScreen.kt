@@ -7,6 +7,7 @@ import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -23,6 +24,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -30,10 +32,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.navigation.NavController
+import com.callstudio.app.container
+import com.callstudio.app.diag.CallDiagnostics
 import com.callstudio.app.permissions.SystemAccess
+import com.callstudio.app.notifications.NotificationHelper
 import com.callstudio.app.ui.components.AppTopBar
 import com.callstudio.app.ui.components.OnResume
 
@@ -65,6 +71,9 @@ fun SetupScreen(nav: NavController) {
         val fullScreen = SystemAccess.fullScreenAllowed(ctx)
         val exact = SystemAccess.exactAlarmsAllowed(ctx)
         val battery = SystemAccess.ignoringBatteryOptimizations(ctx)
+        val alertsLoud = ctx.container.notifications.incomingChannelAllowsPopUp()
+        val ringerNow = SystemAccess.ringerModeLabel(ctx)
+        val dndNow = SystemAccess.doNotDisturbLabel(ctx)
         listOf(
             SetupItem(
                 "Notifications",
@@ -75,6 +84,14 @@ fun SetupScreen(nav: NavController) {
                     if (SystemAccess.needsNotificationPermission(ctx)) notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     else SystemAccess.openNotificationSettings(ctx)
                 },
+            ),
+            SetupItem(
+                "Incoming-call alerts",
+                if (alertsLoud) "On. Calls pop up on screen and on the lock screen."
+                else "Android is showing incoming-call alerts quietly, so they won't pop up on screen or on the lock screen. Open the setting and choose Pop on screen / Urgent.",
+                if (alertsLoud) Status.OK else Status.NEEDS_ACTION,
+                if (alertsLoud) null else "Open settings",
+                { SystemAccess.openChannelSettings(ctx, NotificationHelper.CHANNEL_INCOMING) },
             ),
             SetupItem(
                 "Full-screen call screen",
@@ -119,8 +136,9 @@ fun SetupScreen(nav: NavController) {
             ),
             SetupItem(
                 "Silent mode and Do Not Disturb",
-                "CallStudio rings like a real call. Silent: no sound or vibration. Vibrate: vibration only. Ring: your ringtone, plus vibration if your phone vibrates for calls. Do Not Disturb may hide it, as it does real calls.",
-                Status.INFO,
+                "CallStudio rings like a real call. Silent: no sound or vibration. Vibrate: vibration only. Ring: your ringtone, plus vibration if your phone vibrates for calls. Do Not Disturb may hide it, as it does real calls.\n\n" +
+                    "Right now: the phone is set to ${ringerNow.lowercase()}, " + (dndNow?.let { "$it is on." } ?: "Do Not Disturb is off."),
+                if (dndNow != null || ringerNow == "Silent") Status.NEEDS_ACTION else Status.INFO,
             ),
             SetupItem(
                 "After a force stop",
@@ -153,6 +171,33 @@ fun SetupScreen(nav: NavController) {
                         },
                     )
                 }
+            }
+            CallReportCard(tick)
+        }
+    }
+}
+
+/** What happened the last time a call arrived (alarm, notification, ringing). Helps find out why a call was quiet. */
+@Composable
+private fun CallReportCard(tick: Int) {
+    var refresh by remember { mutableIntStateOf(0) }
+    val lines = remember(tick, refresh) { CallDiagnostics.recent(18) }
+    Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Last call report", style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (lines.isEmpty()) "Nothing yet. After a call arrives, what happened shows here."
+                else "Newest first. Shows what Android allowed when the call arrived.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            lines.forEach { line ->
+                Text(line, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 6.dp))
+            }
+            Row {
+                TextButton(onClick = { refresh++ }) { Text("Refresh") }
+                if (lines.isNotEmpty()) TextButton(onClick = { CallDiagnostics.clear(); refresh++ }) { Text("Clear") }
             }
         }
     }
