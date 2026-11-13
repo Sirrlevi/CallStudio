@@ -516,14 +516,20 @@ class CallSessionManager(
 
     private fun setMessage(message: UiMessage) { _session.update { it.copy(message = message) } }
 
-    /** One line about the phone's call-related settings, for the call report in Settings. */
-    private fun systemState(): String =
+    /**
+     * One line about the phone's call-related settings, for the call report in Settings.
+     * It is only a report: whatever goes wrong while reading these must never get in the way of the call itself.
+     */
+    private fun systemState(): String = try {
         "notifications=${if (SystemAccess.notificationsEnabled(app)) "on" else "OFF"} " +
             "alerts=${notifications.incomingChannelState()} " +
             "fullScreen=${if (SystemAccess.fullScreenAllowed(app)) "yes" else "NO"} " +
             "exactAlarms=${if (SystemAccess.exactAlarmsAllowed(app)) "yes" else "NO"} " +
             "batteryUnrestricted=${if (SystemAccess.ignoringBatteryOptimizations(app)) "yes" else "no"} " +
             "android=${android.os.Build.VERSION.SDK_INT}"
+    } catch (e: Exception) {
+        "(settings unreadable: ${e.javaClass.simpleName})"
+    }
 
     fun clearMessage() { _session.update { it.copy(message = null) } }
 
