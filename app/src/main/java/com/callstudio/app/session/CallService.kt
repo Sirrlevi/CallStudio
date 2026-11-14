@@ -76,7 +76,7 @@ class CallService : Service() {
         val notification = try {
             when (s.status) {
                 // Keeps the "backup" (system ringtone) version when the app's own ringtone had to be replaced.
-                CallStatus.RINGING -> notifications.buildIncoming(s, backup = sessions.systemRing)
+                CallStatus.RINGING -> notifications.buildIncoming(s, backup = sessions.systemRing, foreground = true)
                 CallStatus.ACTIVE -> notifications.buildOngoing(s)
                 else -> notifications.buildEnded()
             }

@@ -6,7 +6,7 @@ plugins {
 }
 
 // Bump this by hand for a bigger release. The CI appends the build number to it.
-val baseVersionName = "1.5.1"
+val baseVersionName = "1.5.2"
 
 android {
     namespace = "com.callstudio.app"

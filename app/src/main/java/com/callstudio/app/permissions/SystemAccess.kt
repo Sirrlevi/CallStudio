@@ -14,6 +14,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.callstudio.app.container
 
 /** Status checks and official settings shortcuts for the access the app can use. */
 object SystemAccess {
@@ -59,11 +60,42 @@ object SystemAccess {
 
     /** Why a call may stay quiet right now (shown when scheduling), or null when nothing is in the way. */
     fun quietHint(ctx: Context): String? {
-        val dnd = doNotDisturbLabel(ctx)
+        val level = DoNotDisturb.read(ctx)
+        val overrides = runCatching { ctx.container.notifications.incomingChannelOverridesDnd() }.getOrDefault(false)
         return when {
-            dnd != null -> "$dnd is on, so the call may stay silent, like a real call from a number you haven't allowed."
+            DoNotDisturb.mayStaySilent(level, overrides) -> when (level) {
+                DndLevel.ALARMS_ONLY, DndLevel.TOTAL_SILENCE ->
+                    "${doNotDisturbLabel(ctx) ?: "Do Not Disturb"} is on, so the call will stay silent, like a real call."
+                else ->
+                    "Do Not Disturb is on, so this call may stay silent. Allow it in Setup (Ring through Do Not Disturb)."
+            }
             ringerModeLabel(ctx) == "Silent" -> "The phone is on silent, so it won't ring."
             else -> null
+        }
+    }
+
+    /** True when CallStudio may change Do Not Disturb settings, which is what lets its calls ring through it. */
+    fun notificationPolicyAccessGranted(ctx: Context): Boolean =
+        runCatching { ctx.getSystemService(NotificationManager::class.java).isNotificationPolicyAccessGranted }.getOrDefault(false)
+
+    /** True when CallStudio may open its call screen over other apps ("Display over other apps"). */
+    fun canDrawOverOtherApps(ctx: Context): Boolean = runCatching { Settings.canDrawOverlays(ctx) }.getOrDefault(false)
+
+    /** Opens CallStudio's page of the "Display over other apps" settings. */
+    fun openOverlaySettings(ctx: Context) = start(
+        ctx,
+        Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}")),
+    )
+
+    /** Opens the page where the user lets CallStudio change Do Not Disturb (needed to ring through it). */
+    fun openDndAccessSettings(ctx: Context) {
+        val detail = Intent("android.settings.NOTIFICATION_POLICY_ACCESS_DETAIL_SETTINGS", Uri.parse("package:${ctx.packageName}"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            ctx.startActivity(detail)
+        } catch (e: Exception) {
+            // Older phones only have the list of all apps.
+            start(ctx, Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
         }
     }
 

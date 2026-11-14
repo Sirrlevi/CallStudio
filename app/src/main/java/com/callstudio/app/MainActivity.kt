@@ -26,5 +26,7 @@ class MainActivity : ComponentActivity() {
         // Looks for a new build when the app opens or comes back to the front. The Dashboard shows the result
         // with a Download button; the update itself is handled by AppContainer.updates.
         container.updates.onAppResumed()
+        // Picks up "Do Not Disturb access" the user may just have allowed, so call alerts can ring through it.
+        runCatching { container.notifications.ensureChannels() }
     }
 }

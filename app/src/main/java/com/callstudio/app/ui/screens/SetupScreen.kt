@@ -38,6 +38,8 @@ import androidx.core.app.ActivityCompat
 import androidx.navigation.NavController
 import com.callstudio.app.container
 import com.callstudio.app.diag.CallDiagnostics
+import com.callstudio.app.permissions.DndLevel
+import com.callstudio.app.permissions.DoNotDisturb
 import com.callstudio.app.permissions.SystemAccess
 import com.callstudio.app.notifications.NotificationHelper
 import com.callstudio.app.ui.components.AppTopBar
@@ -74,6 +76,22 @@ fun SetupScreen(nav: NavController) {
         val alertsLoud = ctx.container.notifications.incomingChannelAllowsPopUp()
         val ringerNow = SystemAccess.ringerModeLabel(ctx)
         val dndNow = SystemAccess.doNotDisturbLabel(ctx)
+        val dndLevel = DoNotDisturb.read(ctx)
+        val overridesDnd = ctx.container.notifications.incomingChannelOverridesDnd()
+        val dndAccess = SystemAccess.notificationPolicyAccessGranted(ctx)
+        val strictDnd = dndLevel == DndLevel.ALARMS_ONLY || dndLevel == DndLevel.TOTAL_SILENCE
+        val dndMaySilence = DoNotDisturb.mayStaySilent(dndLevel, overridesDnd)
+        val overApps = SystemAccess.canDrawOverOtherApps(ctx)
+        val dndBody = buildString {
+            if (strictDnd) {
+                append("${dndNow ?: "Do Not Disturb"} is on right now and silences every call, as it does for real calls. Switch it to Priority only, or turn it off, to hear calls. ")
+            }
+            when {
+                overridesDnd -> append("Allowed. Calls ring, vibrate and pop up even when Do Not Disturb is set to Priority only.")
+                !dndAccess -> append("Tap Allow and switch CallStudio on, so calls can ring through Do Not Disturb like real calls.")
+                else -> append("Tap Allow, then switch on Override Do Not Disturb for Incoming calls, so calls can ring through Do Not Disturb like real calls.")
+            }
+        }
         listOf(
             SetupItem(
                 "Notifications",
@@ -92,6 +110,31 @@ fun SetupScreen(nav: NavController) {
                 if (alertsLoud) Status.OK else Status.NEEDS_ACTION,
                 if (alertsLoud) null else "Open settings",
                 { SystemAccess.openChannelSettings(ctx, NotificationHelper.CHANNEL_INCOMING) },
+            ),
+            SetupItem(
+                "Ring through Do Not Disturb",
+                dndBody,
+                when {
+                    strictDnd -> Status.NEEDS_ACTION
+                    overridesDnd -> Status.OK
+                    dndMaySilence -> Status.NEEDS_ACTION
+                    else -> Status.INFO
+                },
+                if (overridesDnd) null else "Allow",
+                {
+                    // Step 1: let CallStudio manage Do Not Disturb. Step 2 (only if Android kept an older choice for the
+                    // channel): switch on "Override Do Not Disturb" in the call channel's own settings.
+                    if (dndAccess) SystemAccess.openChannelSettings(ctx, NotificationHelper.CHANNEL_INCOMING)
+                    else SystemAccess.openDndAccessSettings(ctx)
+                },
+            ),
+            SetupItem(
+                "Call screen over other apps",
+                if (overApps) "Allowed. A ringing call opens its full screen over whatever you are doing, like a real call."
+                else "Not allowed. While you use another app, a call shows as a banner you tap instead of opening by itself. Allow \"Display over other apps\" to change that.",
+                if (overApps) Status.OK else Status.INFO,
+                if (overApps) null else "Allow",
+                { SystemAccess.openOverlaySettings(ctx) },
             ),
             SetupItem(
                 "Full-screen call screen",
