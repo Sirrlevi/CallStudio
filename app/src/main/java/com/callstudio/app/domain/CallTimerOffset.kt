@@ -18,6 +18,13 @@ object CallTimerOffset {
     fun fromParts(hours: Long, minutes: Long, seconds: Long): Long =
         clamp(hours.coerceIn(0L, MAX_HOURS) * 3_600L + minutes.coerceIn(0L, 59L) * 60L + seconds.coerceIn(0L, 59L))
 
+    /**
+     * The clock base for a timer that must read [seconds] at this very moment and keep running (the timer shows
+     * `nowElapsed - base`). A time of 0 means a normal timer, so the base goes back to the call's real start.
+     */
+    fun liveBase(nowElapsed: Long, realStartElapsed: Long, seconds: Long): Long =
+        if (clamp(seconds) == 0L) realStartElapsed else nowElapsed - toMillis(seconds)
+
     fun hours(seconds: Long): Long = clamp(seconds) / 3_600L
 
     fun minutes(seconds: Long): Long = clamp(seconds) % 3_600L / 60L

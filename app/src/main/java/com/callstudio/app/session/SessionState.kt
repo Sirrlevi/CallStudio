@@ -22,8 +22,10 @@ data class SessionState(
     val voiceLabel: String? = null,
     val held: Boolean = false,
     val answeredAtMillis: Long = 0L,
-    /** SystemClock.elapsedRealtime() at answer time; used for the on-screen timer. */
+    /** The clock base of the on-screen timer: it shows `elapsedRealtime() - answeredElapsed` (see "Ongoing call timer"). */
     val answeredElapsed: Long = 0L,
+    /** SystemClock.elapsedRealtime() when the call was really answered, so a normal timer can always be restored. */
+    val answeredRealElapsed: Long = 0L,
     val muted: Boolean = false,
     val speakerOn: Boolean = false,
     val voice: VoiceState = VoiceState.NoClip,

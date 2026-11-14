@@ -67,8 +67,10 @@ enum class FakePhase {
 data class FakeCallState(
     val phase: FakePhase = FakePhase.IDLE,
     val request: FakeCallRequest? = null,
-    /** SystemClock.elapsedRealtime() when the other side picked up. */
+    /** The clock base of the call timer: it shows `elapsedRealtime() - connectedElapsed` (see "Ongoing call timer"). */
     val connectedElapsed: Long = 0L,
+    /** SystemClock.elapsedRealtime() when the other side really picked up, so a normal timer can always be restored. */
+    val realConnectedElapsed: Long = 0L,
     val muted: Boolean = false,
     val speakerOn: Boolean = false,
     val held: Boolean = false,
@@ -115,6 +117,17 @@ class FakeOutgoingEngine(
     }
 
     // ---- control ------------------------------------------------------------------------------------------
+
+    /**
+     * "Ongoing call timer" saved in Settings while a fake outgoing call is connected: the timer reads that time right
+     * now and keeps running (0 = the real time since the call connected).
+     */
+    fun setLiveTimer(seconds: Long) {
+        _state.update {
+            if (it.phase != FakePhase.CONNECTED) it
+            else it.copy(connectedElapsed = CallTimerOffset.liveBase(SystemClock.elapsedRealtime(), it.realConnectedElapsed, seconds))
+        }
+    }
 
     fun start(request: FakeCallRequest): FakeStartResult {
         if (_state.value.phase != FakePhase.IDLE) return FakeStartResult.ALREADY_IN_CALL
@@ -287,7 +300,8 @@ class FakeOutgoingEngine(
         } catch (t: Exception) {
             0L
         }
-        _state.update { it.copy(phase = FakePhase.CONNECTED, connectedElapsed = SystemClock.elapsedRealtime() - head) }
+        val pickedUp = SystemClock.elapsedRealtime()
+        _state.update { it.copy(phase = FakePhase.CONNECTED, connectedElapsed = pickedUp - head, realConnectedElapsed = pickedUp) }
         // The other person says "Hello?" before anything is heard from them.
         if (sleep(plan.voiceDelayMs)) return hungUp()
         if (clipReady?.await() == true) voice.play()

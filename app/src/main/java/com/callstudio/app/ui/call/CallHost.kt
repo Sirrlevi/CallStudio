@@ -54,7 +54,7 @@ fun CallHost(
     edgeGlow: EdgeGlowStyle = EdgeGlowStyle.OFF,
 ) {
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
-    LaunchedEffect(session.status) {
+    LaunchedEffect(session.status, session.answeredElapsed) {
         if (session.status == CallStatus.ACTIVE) {
             while (true) {
                 now = SystemClock.elapsedRealtime()

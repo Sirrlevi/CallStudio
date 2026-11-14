@@ -288,6 +288,7 @@ class CallSessionManager(
         // on every call screen and in the call history starts there and keeps running.
         val head = CallTimerOffset.toMillis(st.callTimerOffsetSeconds)
         val answeredAt = System.currentTimeMillis() - head
+        val answeredReal = SystemClock.elapsedRealtime()
         calls.get(eventId)?.let { calls.update(it.copy(status = next.name, answeredAtMillis = answeredAt)) }
         router.enterCall()
         if (st.startOnSpeaker) router.setSpeaker(true)
@@ -295,13 +296,36 @@ class CallSessionManager(
             it.copy(
                 status = next,
                 answeredAtMillis = answeredAt,
-                answeredElapsed = SystemClock.elapsedRealtime() - head,
+                answeredElapsed = answeredReal - head,
+                answeredRealElapsed = answeredReal,
                 speakerOn = router.isSpeakerOn(),
             )
         }
         if (!CallService.isRunning) CallService.start(app)
         val playable = withContext(Dispatchers.IO) { voice.load(s.voiceUri, repeat = st.voiceMode == VoicePlayMode.AUTO_REPEAT) }
         if (playable && st.voiceMode != VoicePlayMode.MANUAL) voice.play()
+    }
+
+    /**
+     * "Ongoing call timer" saved in Settings while a call is running: the timer reads that time right now and keeps
+     * running (0 = the real time since the call was answered). The notification, every call screen and the call
+     * history follow at once.
+     */
+    fun setLiveTimer(seconds: Long) {
+        scope.launch {
+            gate.await()
+            mutex.withLock {
+                val s = _session.value
+                if (s.status != CallStatus.ACTIVE) return@withLock
+                val nowElapsed = SystemClock.elapsedRealtime()
+                val base = CallTimerOffset.liveBase(nowElapsed, s.answeredRealElapsed, seconds)
+                val answeredAt = System.currentTimeMillis() - (nowElapsed - base)
+                _session.update {
+                    if (it.eventId == s.eventId && it.status == CallStatus.ACTIVE) it.copy(answeredAtMillis = answeredAt, answeredElapsed = base) else it
+                }
+                calls.get(s.eventId)?.let { calls.update(it.copy(answeredAtMillis = answeredAt)) }
+            }
+        }
     }
 
     fun decline(eventId: Long) {

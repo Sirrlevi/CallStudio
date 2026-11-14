@@ -28,7 +28,15 @@ import kotlinx.coroutines.launch
 class CallService : Service() {
     private var scope: CoroutineScope? = null
 
-    private data class Key(val status: CallStatus?, val eventId: Long, val muted: Boolean, val recording: Boolean, val name: String)
+    private data class Key(
+        val status: CallStatus?,
+        val eventId: Long,
+        val muted: Boolean,
+        val recording: Boolean,
+        val name: String,
+        /** Changes when the call timer is re-set in Settings, so the notification's timer is rebuilt. */
+        val timerStart: Long,
+    )
 
     private val sessions get() = (application as CallStudioApp).container.sessions
     private val notifications get() = (application as CallStudioApp).container.notifications
@@ -41,7 +49,7 @@ class CallService : Service() {
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).also { sc ->
             sc.launch {
                 sessions.session
-                    .map { Key(it.status, it.eventId, it.muted, it.recording.isActive, it.callerName) }
+                    .map { Key(it.status, it.eventId, it.muted, it.recording.isActive, it.callerName, it.answeredAtMillis) }
                     .distinctUntilChanged()
                     .collect { refresh() }
             }

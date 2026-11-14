@@ -55,7 +55,6 @@ import com.callstudio.app.ui.components.AppTopBar
 import com.callstudio.app.ui.components.SectionTitle
 import com.callstudio.app.ui.viewmodels.SettingsViewModel
 import com.callstudio.app.preferences.EdgeGlowStyle
-import com.callstudio.app.preferences.NotificationBadgeStyle
 
 @Composable
 fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
@@ -91,8 +90,8 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
             )
             NavRow(
                 "Ongoing call timer",
-                if (st.callTimerOffsetSeconds == 0L) "Starts at 0:00 like a normal call. Tap to start it at any time you like."
-                else "Every call's timer starts at ${CallTimerOffset.label(st.callTimerOffsetSeconds)}. Tap to change.",
+                if (st.callTimerOffsetSeconds == 0L) "Normal timer. Tap to set the timer to any time, even while a call is running."
+                else "Set to ${CallTimerOffset.label(st.callTimerOffsetSeconds)}: a running call and every new call. Tap to change.",
             ) { timerDialog = true }
             ListItem(
                 headlineContent = { Text("Neon edge glow") },
@@ -110,33 +109,6 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
                             }
                         }
                     }
-                },
-            )
-
-            SectionTitle("Notifications")
-            ListItem(
-                headlineContent = { Text("Caller photo badge") },
-                supportingContent = {
-                    Column {
-                        Text("Choose the optional marker shown on the caller photo in call notifications. Switch it off to show no icon at all.")
-                        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                            val choices = listOf(
-                                NotificationBadgeStyle.ONLINE_DOT to "Green dot",
-                                NotificationBadgeStyle.APP_LOGO to "Phone logo",
-                            )
-                            choices.forEachIndexed { index, (style, label) ->
-                                SegmentedButton(
-                                    selected = st.notificationBadgeStyle == style,
-                                    onClick = { vm.setNotificationBadgeStyle(style) },
-                                    shape = SegmentedButtonDefaults.itemShape(index, choices.size),
-                                    enabled = st.notificationBadgeEnabled,
-                                ) { Text(label, maxLines = 1) }
-                            }
-                        }
-                    }
-                },
-                trailingContent = {
-                    Switch(checked = st.notificationBadgeEnabled, onCheckedChange = { vm.setNotificationBadgeEnabled(it) })
                 },
             )
 
@@ -195,7 +167,8 @@ private fun CallTimerDialog(currentSeconds: Long, onSave: (Long) -> Unit, onDism
         text = {
             Column {
                 Text(
-                    "Every call's timer starts here and keeps running: in the notification and on the call screens, for incoming and outgoing calls.",
+                    "The timer of a call that is running right now, and of every new call, jumps to this time and keeps running. " +
+                        "For incoming and outgoing calls, in the notification and on the call screens.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
