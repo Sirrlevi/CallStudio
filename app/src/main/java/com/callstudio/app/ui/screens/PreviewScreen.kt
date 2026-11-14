@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.callstudio.app.domain.CallTimerOffset
 import com.callstudio.app.ui.call.ControlSpec
 import com.callstudio.app.ui.call.EdgeGlow
 import com.callstudio.app.ui.call.InCallModel
@@ -82,7 +83,10 @@ fun PreviewScreen(nav: NavController, callerId: Long, vm: PreviewViewModel = vie
                     val controls = buildList {
                         add(ControlSpec("speaker", "Speaker", Icons.Filled.VolumeUp, vm.speakerOn, onClick = { vm.toggleSpeaker() }))
                     }
-                    InCallScreen(s.theme, InCallModel(caller, (now - start).coerceAtLeast(0L), null, controls, onEnd = leave))
+                    InCallScreen(
+                        s.theme,
+                        InCallModel(caller, (now - start).coerceAtLeast(0L) + CallTimerOffset.toMillis(s.callTimerOffsetSeconds), null, controls, onEnd = leave),
+                    )
                 }
                 Box(Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(8.dp)) {
                     Surface(shape = RoundedCornerShape(50), color = Color(0x99000000)) {

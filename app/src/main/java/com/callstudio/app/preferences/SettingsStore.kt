@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.callstudio.app.domain.CallTimerOffset
 import com.callstudio.app.ui.theme.CallTheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -32,9 +33,11 @@ class SettingsStore(private val context: Context) {
         val RING_TIMEOUT = intPreferencesKey("ring_timeout_seconds")
         val SAMPLE_RATE = intPreferencesKey("recording_sample_rate")
         val NOTIFICATION_BADGE = stringPreferencesKey("notification_badge_style")
+        val NOTIFICATION_BADGE_ENABLED = booleanPreferencesKey("notification_badge_enabled")
         val LAST_CALLER = longPreferencesKey("last_caller_id")
         val FOLLOW_PHONE_RINGER = booleanPreferencesKey("follow_phone_ringer")
         val EDGE_GLOW = stringPreferencesKey("edge_glow")
+        val CALL_TIMER_OFFSET = longPreferencesKey("call_timer_offset_seconds")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data
@@ -53,9 +56,11 @@ class SettingsStore(private val context: Context) {
                 ringTimeoutSeconds = p[K.RING_TIMEOUT] ?: d.ringTimeoutSeconds,
                 recordingSampleRate = p[K.SAMPLE_RATE] ?: d.recordingSampleRate,
                 notificationBadgeStyle = parse(p[K.NOTIFICATION_BADGE], d.notificationBadgeStyle),
+                notificationBadgeEnabled = p[K.NOTIFICATION_BADGE_ENABLED] ?: d.notificationBadgeEnabled,
                 lastCallerId = p[K.LAST_CALLER] ?: d.lastCallerId,
                 followPhoneRinger = p[K.FOLLOW_PHONE_RINGER] ?: d.followPhoneRinger,
                 edgeGlow = parse(p[K.EDGE_GLOW], d.edgeGlow),
+                callTimerOffsetSeconds = CallTimerOffset.clamp(p[K.CALL_TIMER_OFFSET] ?: d.callTimerOffsetSeconds),
             )
         }
 
@@ -87,6 +92,18 @@ class SettingsStore(private val context: Context) {
         context.getSharedPreferences(NOTIFICATION_PREF_FILE, Context.MODE_PRIVATE)
             .edit().putString(NOTIFICATION_PREF_KEY, style.name).apply()
     }
+    suspend fun setNotificationBadgeEnabled(on: Boolean) {
+        context.dataStore.edit { it[K.NOTIFICATION_BADGE_ENABLED] = on }
+        // Mirrored for the same reason as the badge style: the notification is built synchronously.
+        context.getSharedPreferences(NOTIFICATION_PREF_FILE, Context.MODE_PRIVATE)
+            .edit().putBoolean(NOTIFICATION_PREF_ENABLED_KEY, on).apply()
+    }
+
+    /** Where every call's timer starts, in seconds (0 = a normal timer). */
+    suspend fun setCallTimerOffsetSeconds(seconds: Long) {
+        context.dataStore.edit { it[K.CALL_TIMER_OFFSET] = CallTimerOffset.clamp(seconds) }
+    }
+
     suspend fun setLastCaller(id: Long?) {
         context.dataStore.edit { if (id == null) it.remove(K.LAST_CALLER) else it[K.LAST_CALLER] = id }
     }
@@ -94,6 +111,7 @@ class SettingsStore(private val context: Context) {
     companion object {
         const val NOTIFICATION_PREF_FILE = "notification_badge"
         const val NOTIFICATION_PREF_KEY = "style"
+        const val NOTIFICATION_PREF_ENABLED_KEY = "enabled"
     }
 
     private inline fun <reified T : Enum<T>> parse(value: String?, default: T): T =

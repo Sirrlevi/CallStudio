@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
@@ -14,16 +15,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.callstudio.app.container
+import com.callstudio.app.domain.CallTimerOffset
 import com.callstudio.app.update.UpdateUiState
 import com.callstudio.app.ui.components.DownloadProgress
 import com.callstudio.app.ui.components.describeBuild
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -54,6 +60,7 @@ import com.callstudio.app.preferences.NotificationBadgeStyle
 @Composable
 fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
     val st by vm.settings.collectAsStateWithLifecycle()
+    var timerDialog by remember { mutableStateOf(false) }
     val timeouts = listOf(30, 45, 60)
     val rates = listOf(16_000 to "Voice · 16 kHz", 44_100 to "High · 44.1 kHz")
 
@@ -82,6 +89,11 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
                 headlineContent = { Text("Keep screen on during calls") },
                 trailingContent = { Switch(checked = st.keepScreenOn, onCheckedChange = { vm.setKeepScreenOn(it) }) },
             )
+            NavRow(
+                "Ongoing call timer",
+                if (st.callTimerOffsetSeconds == 0L) "Starts at 0:00 like a normal call. Tap to start it at any time you like."
+                else "Every call's timer starts at ${CallTimerOffset.label(st.callTimerOffsetSeconds)}. Tap to change.",
+            ) { timerDialog = true }
             ListItem(
                 headlineContent = { Text("Neon edge glow") },
                 supportingContent = {
@@ -106,7 +118,7 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
                 headlineContent = { Text("Caller photo badge") },
                 supportingContent = {
                     Column {
-                        Text("Choose the optional marker shown on the caller photo in call notifications.")
+                        Text("Choose the optional marker shown on the caller photo in call notifications. Switch it off to show no icon at all.")
                         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                             val choices = listOf(
                                 NotificationBadgeStyle.ONLINE_DOT to "Green dot",
@@ -117,10 +129,14 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
                                     selected = st.notificationBadgeStyle == style,
                                     onClick = { vm.setNotificationBadgeStyle(style) },
                                     shape = SegmentedButtonDefaults.itemShape(index, choices.size),
+                                    enabled = st.notificationBadgeEnabled,
                                 ) { Text(label, maxLines = 1) }
                             }
                         }
                     }
+                },
+                trailingContent = {
+                    Switch(checked = st.notificationBadgeEnabled, onCheckedChange = { vm.setNotificationBadgeEnabled(it) })
                 },
             )
 
@@ -158,6 +174,63 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
             )
         }
     }
+    if (timerDialog) {
+        CallTimerDialog(
+            currentSeconds = st.callTimerOffsetSeconds,
+            onSave = { vm.setCallTimerOffset(it); timerDialog = false },
+            onDismiss = { timerDialog = false },
+        )
+    }
+}
+
+@Composable
+private fun CallTimerDialog(currentSeconds: Long, onSave: (Long) -> Unit, onDismiss: () -> Unit) {
+    var hours by remember { mutableStateOf(CallTimerOffset.hours(currentSeconds).toString()) }
+    var minutes by remember { mutableStateOf(CallTimerOffset.minutes(currentSeconds).toString()) }
+    var seconds by remember { mutableStateOf(CallTimerOffset.secondsPart(currentSeconds).toString()) }
+    val total = CallTimerOffset.fromParts(hours.toLongOrNull() ?: 0L, minutes.toLongOrNull() ?: 0L, seconds.toLongOrNull() ?: 0L)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Ongoing call timer") },
+        text = {
+            Column {
+                Text(
+                    "Every call's timer starts here and keeps running: in the notification and on the call screens, for incoming and outgoing calls.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TimerField("Hours", hours, 4, Modifier.weight(1.3f)) { hours = it }
+                    TimerField("Min", minutes, 2, Modifier.weight(1f)) { minutes = it }
+                    TimerField("Sec", seconds, 2, Modifier.weight(1f)) { seconds = it }
+                }
+                Text(
+                    "Starts at ${CallTimerOffset.label(total)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(total) }) { Text("Save") } },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { onSave(0L) }) { Text("Normal timer") }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        },
+    )
+}
+
+@Composable
+private fun TimerField(label: String, value: String, maxDigits: Int, modifier: Modifier, onChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { onChange(it.filter { ch -> ch.isDigit() }.take(maxDigits)) },
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = modifier,
+    )
 }
 
 @Composable

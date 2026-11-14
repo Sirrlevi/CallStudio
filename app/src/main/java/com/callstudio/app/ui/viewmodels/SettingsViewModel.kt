@@ -50,6 +50,8 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setRingTimeout(seconds: Int) { viewModelScope.launch { c.settings.setRingTimeout(seconds) } }
     fun setSampleRate(hz: Int) { viewModelScope.launch { c.settings.setRecordingSampleRate(hz) } }
     fun setNotificationBadgeStyle(style: NotificationBadgeStyle) { viewModelScope.launch { c.settings.setNotificationBadgeStyle(style) } }
+    fun setNotificationBadgeEnabled(on: Boolean) { viewModelScope.launch { c.settings.setNotificationBadgeEnabled(on) } }
+    fun setCallTimerOffset(seconds: Long) { viewModelScope.launch { c.settings.setCallTimerOffsetSeconds(seconds) } }
 
     // ---- ringtone ----------------------------------------------------------------------------------------
 
