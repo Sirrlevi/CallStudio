@@ -15,7 +15,6 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Color as AndroidColor
 import android.util.Log
-import android.widget.RemoteViews
 import android.media.AudioAttributes
 import android.net.Uri
 import android.provider.Settings
@@ -37,8 +36,9 @@ class NotificationHelper(private val context: Context, private val photos: Photo
 
     fun ensureChannels() {
         val system = context.getSystemService(NotificationManager::class.java)
-        // A channel's importance and sound can't be changed by the app once it exists, and an older build (or a
-        // switch flipped in Android settings) may have left the call channels muted. New ids start clean.
+        // A channel's importance, sound and "override Do Not Disturb" can't be changed by the app once the user has touched
+        // it, and an older build (or a switch flipped in Android settings) may have left the call channels muted. New ids
+        // start clean, so the app can still switch them on once Do Not Disturb access is allowed.
         LEGACY_CHANNELS.forEach { runCatching { system.deleteNotificationChannel(it) } }
         val ring = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
@@ -51,6 +51,9 @@ class NotificationHelper(private val context: Context, private val photos: Photo
             enableVibration(false)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             setShowBadge(false)
+            // Honoured once the user lets CallStudio manage Do Not Disturb (or flips "Override Do Not Disturb" for this
+            // channel in Android settings). Without it Android just ignores the request.
+            setBypassDnd(true)
         }
         // Used only if the ringing service can't start; the system then plays the default ringtone.
         val backup = NotificationChannel(CHANNEL_BACKUP, "Incoming calls (backup alert)", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -60,6 +63,7 @@ class NotificationHelper(private val context: Context, private val photos: Photo
             vibrationPattern = longArrayOf(0, 700, 700, 700)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             setShowBadge(false)
+            setBypassDnd(true)
         }
         val ongoing = NotificationChannel(CHANNEL_ONGOING, "Ongoing call", NotificationManager.IMPORTANCE_LOW).apply {
             description = "Shows the call in progress with hang up and mute"
@@ -96,24 +100,33 @@ class NotificationHelper(private val context: Context, private val photos: Photo
             .setShowWhen(true)
             .setAutoCancel(true)
             .setContentIntent(open)
-        avatar(photoFile, readBadgeStyle())?.let { b.setLargeIcon(it) }
+        avatar(photoFile, Marker.NONE)?.let { b.setLargeIcon(it) }
         manager.notify(MISSED_ID_BASE + (eventId and 0xFFFL).toInt(), b.build())
     }
 
-    fun buildIncoming(s: SessionState, backup: Boolean): Notification {
+    /**
+     * The incoming-call notification. Whenever Android allows it (a foreground-service notification, or one with a
+     * full-screen intent) it uses Android's own call style: the card a real call gets, with the caller's photo, the
+     * app's real icon on it, and big Answer / Decline buttons. Otherwise it is an ordinary notification with the
+     * same two buttons.
+     */
+    fun buildIncoming(s: SessionState, backup: Boolean, foreground: Boolean = false): Notification {
         val open = activityIntent(s.eventId, answer = false)
         val answer = activityIntent(s.eventId, answer = true)
         val decline = broadcastIntent(s.eventId, ACTION_DECLINE, RequestCodes.DECLINE)
         val badgeStyle = readBadgeStyle()
-        val callerPortrait = avatar(s.callerPhotoFile, badgeStyle)
+        val fullScreen = SystemAccess.fullScreenAllowed(context)
+        val callStyle = foreground || fullScreen
+        val portrait = avatar(s.callerPhotoFile, markerFor(badgeStyle, callStyle))
+        val person = callerPerson(s, portrait)
         val b = NotificationCompat.Builder(context, if (backup) CHANNEL_BACKUP else CHANNEL_INCOMING)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(s.displayName)
+            .setSmallIcon(smallIcon(badgeStyle, callStyle))
+            .setContentTitle(s.displayName.ifBlank { "Unknown" })
             .setContentText("Incoming call")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("Incoming call"))
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setColor(CALL_COLOR)
             .setOngoing(true)
             .setAutoCancel(false)
             // The call notification is posted first and then adopted by the ringing service; the second post must
@@ -121,56 +134,77 @@ class NotificationHelper(private val context: Context, private val photos: Photo
             .setOnlyAlertOnce(!backup)
             .setContentIntent(open)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .addAction(0, "Decline", decline)
-            .addAction(0, "Answer", answer)
-
-        // Do Not Disturb decides "calls from contacts only" using the caller's number, exactly as it does for a real
-        // call. Without this the notification has no caller at all and is treated as a stranger.
-        val handle = PhoneNumbers.dialable(s.callerPhone)
-        if (handle.isNotEmpty()) {
-            b.addPerson(Person.Builder().setName(s.displayName.ifBlank { handle }).setKey(handle).setUri("tel:$handle").build())
+            // Do Not Disturb decides "calls from contacts only" using the caller's number, exactly as for a real call.
+            .addPerson(person)
+        if (callStyle) {
+            b.setStyle(NotificationCompat.CallStyle.forIncomingCall(person, decline, answer))
+        } else {
+            b.addAction(0, "Decline", decline)
+            b.addAction(0, "Answer", answer)
+            portrait?.let { b.setLargeIcon(it) }
         }
-        if (callerPortrait != null) b.setLargeIcon(callerPortrait)
         // The full-screen activity remains responsible for the Truecaller-style incoming UI.
-        // A standard call-category notification avoids Android's extra app-icon badge on the photo.
-        if (SystemAccess.fullScreenAllowed(context)) b.setFullScreenIntent(open, true)
+        if (fullScreen) b.setFullScreenIntent(open, true)
         val n = b.build()
         if (backup) n.flags = n.flags or Notification.FLAG_INSISTENT
         return n
     }
 
+    /**
+     * The call-in-progress notification: Android's own call style, like the phone's real call card. It shows the
+     * caller's photo with the app's real icon on it, a running call timer, and Hang Up and Mute buttons.
+     */
     fun buildOngoing(s: SessionState): Notification {
         val hangUp = broadcastIntent(s.eventId, ACTION_END, RequestCodes.HANG_UP)
         val mute = broadcastIntent(s.eventId, ACTION_TOGGLE_MUTE, RequestCodes.MUTE)
         val badgeStyle = readBadgeStyle()
-        // Do not use CallStyle here: on some Android skins it forcibly overlays the
-        // system/Android app badge on the caller portrait. This custom card keeps the
-        // caller photo clean and lets the user choose the optional online/app marker.
-        val portrait = avatar(s.callerPhotoFile, badgeStyle)
-        val remote = RemoteViews(context.packageName, R.layout.notification_ongoing).apply {
-            setTextViewText(R.id.call_title, s.displayName.ifBlank { "Unknown" })
-            setTextViewText(R.id.call_status, if (s.recording.isActive) "Ongoing call · Recording" else "Ongoing call")
-            setTextViewText(R.id.action_mute, if (s.muted) "Unmute" else "Mute")
-            if (portrait != null) setImageViewBitmap(R.id.call_avatar, portrait)
-            setOnClickPendingIntent(R.id.ongoing_root, activityIntent(s.eventId, answer = false))
-            setOnClickPendingIntent(R.id.action_hangup, hangUp)
-            setOnClickPendingIntent(R.id.action_mute, mute)
-        }
-
+        val person = callerPerson(s, avatar(s.callerPhotoFile, markerFor(badgeStyle, callStyle = true)))
         return NotificationCompat.Builder(context, CHANNEL_ONGOING)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(smallIcon(badgeStyle, callStyle = true))
             .setContentTitle(s.displayName.ifBlank { "Ongoing call" })
-            .setContentText("Ongoing call")
+            .setContentText(if (s.recording.isActive) "Ongoing call · Recording" else "Ongoing call")
             .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setColor(CALL_COLOR)
+            .setColorized(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setUsesChronometer(true)
+            .setShowWhen(true)
+            .setWhen(s.answeredAtMillis.takeIf { it > 0L } ?: System.currentTimeMillis())
             .setContentIntent(activityIntent(s.eventId, answer = false))
-            .setCustomContentView(remote)
-            .setCustomBigContentView(remote)
-            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setStyle(NotificationCompat.CallStyle.forOngoingCall(person, hangUp))
+            .addAction(
+                if (s.muted) R.drawable.ic_action_unmute else R.drawable.ic_action_mute,
+                if (s.muted) "Unmute" else "Mute",
+                mute,
+            )
             .build()
     }
+
+    /** The caller as Android's call style and Do Not Disturb see them: name, photo, and the number for "contacts only". */
+    private fun callerPerson(s: SessionState, portrait: Bitmap?): Person {
+        val handle = PhoneNumbers.dialable(s.callerPhone)
+        return Person.Builder()
+            .setName(s.displayName.ifBlank { "Unknown" })
+            .setImportant(true)
+            .apply {
+                portrait?.let { setIcon(IconCompat.createWithBitmap(it)) }
+                if (handle.isNotEmpty()) {
+                    setKey(handle)
+                    setUri("tel:$handle")
+                }
+            }
+            .build()
+    }
+
+    /**
+     * In Android's call style the small icon is drawn by the system as the app badge on the caller's photo. The
+     * "online dot" style swaps it for a clear icon so that only the dot shows.
+     */
+    private fun smallIcon(style: NotificationBadgeStyle, callStyle: Boolean): Int =
+        if (callStyle && style == NotificationBadgeStyle.ONLINE_DOT) R.drawable.ic_notification_clear else R.drawable.ic_notification
 
     private fun readBadgeStyle(): NotificationBadgeStyle = runCatching {
         val raw = context.getSharedPreferences(SettingsStore.NOTIFICATION_PREF_FILE, Context.MODE_PRIVATE)
@@ -219,6 +253,11 @@ class NotificationHelper(private val context: Context, private val photos: Photo
         return importance >= NotificationManager.IMPORTANCE_HIGH
     }
 
+    /** True when Android lets the call notification ring and pop up even in Do Not Disturb. */
+    fun incomingChannelOverridesDnd(): Boolean = runCatching {
+        context.getSystemService(NotificationManager::class.java).getNotificationChannel(CHANNEL_INCOMING)?.canBypassDnd() == true
+    }.getOrDefault(false)
+
     /** Short word for the call report: how Android currently treats the call notification channel. */
     fun incomingChannelState(): String = when (val importance = incomingChannelImportance()) {
         null -> "unknown"
@@ -254,8 +293,20 @@ class NotificationHelper(private val context: Context, private val photos: Photo
         )
     }
 
-    /** Makes a true circular contact portrait and composites the user's chosen badge into it. */
-    private fun avatar(name: String?, badgeStyle: NotificationBadgeStyle, useSystemAppBadge: Boolean = false): Bitmap? {
+    /** What to leave in the lower-right corner of the caller's photo. */
+    private enum class Marker { NONE, ROOM_FOR_APP_BADGE, ONLINE_DOT }
+
+    private fun markerFor(style: NotificationBadgeStyle, callStyle: Boolean): Marker = when {
+        style == NotificationBadgeStyle.ONLINE_DOT -> Marker.ONLINE_DOT
+        callStyle -> Marker.ROOM_FOR_APP_BADGE
+        else -> Marker.NONE
+    }
+
+    /**
+     * Makes a true circular contact portrait. In Android's call style the system draws the app's real icon in the
+     * lower-right corner itself, so the portrait only leaves a clear ring for it; nothing fake is painted on the photo.
+     */
+    private fun avatar(name: String?, marker: Marker): Bitmap? {
         val file = photos.file(name) ?: return null
         return try {
             val source = BitmapFactory.decodeFile(file.path) ?: return null
@@ -279,30 +330,16 @@ class NotificationHelper(private val context: Context, private val photos: Photo
             crop.recycle()
             if (source !== crop && !source.isRecycled) source.recycle()
 
-            val cx = size * 0.79f
-            val cy = size * 0.79f
-            val radius = size * 0.17f
-            val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG)
-            badgePaint.color = AndroidColor.WHITE
-            canvas.drawCircle(cx, cy, radius + 4f, badgePaint)
-            when (badgeStyle) {
-                NotificationBadgeStyle.ONLINE_DOT -> {
-                    badgePaint.color = AndroidColor.rgb(46, 204, 96)
-                    canvas.drawCircle(cx, cy, radius, badgePaint)
-                }
-                NotificationBadgeStyle.APP_LOGO -> if (!useSystemAppBadge) {
-                    badgePaint.color = AndroidColor.rgb(26, 115, 232)
-                    canvas.drawCircle(cx, cy, radius, badgePaint)
-                    val phone = Path().apply {
-                        moveTo(cx - radius * 0.45f, cy - radius * 0.48f)
-                        cubicTo(cx - radius * 0.62f, cy - radius * 0.35f, cx - radius * 0.30f, cy + radius * 0.37f, cx + radius * 0.43f, cy + radius * 0.48f)
-                    }
-                    badgePaint.color = AndroidColor.WHITE
-                    badgePaint.style = Paint.Style.STROKE
-                    badgePaint.strokeWidth = 7f
-                    badgePaint.strokeCap = Paint.Cap.ROUND
-                    badgePaint.strokeJoin = Paint.Join.ROUND
-                    canvas.drawPath(phone, badgePaint)
+            if (marker != Marker.NONE) {
+                val cx = size * 0.79f
+                val cy = size * 0.79f
+                val radius = size * 0.17f
+                val markerPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+                markerPaint.color = AndroidColor.WHITE
+                canvas.drawCircle(cx, cy, radius + 4f, markerPaint)
+                if (marker == Marker.ONLINE_DOT) {
+                    markerPaint.color = AndroidColor.rgb(46, 204, 96)
+                    canvas.drawCircle(cx, cy, radius, markerPaint)
                 }
             }
             output
@@ -312,14 +349,15 @@ class NotificationHelper(private val context: Context, private val photos: Photo
     }
 
     companion object {
-        const val CHANNEL_INCOMING = "incoming_call_v2"
-        const val CHANNEL_BACKUP = "incoming_call_backup_v2"
-        private val LEGACY_CHANNELS = listOf("incoming_call", "incoming_call_backup")
+        const val CHANNEL_INCOMING = "incoming_call_v3"
+        const val CHANNEL_BACKUP = "incoming_call_backup_v3"
+        private val LEGACY_CHANNELS = listOf("incoming_call", "incoming_call_backup", "incoming_call_v2", "incoming_call_backup_v2")
         private const val TAG = "NotificationHelper"
         const val CHANNEL_ONGOING = "ongoing_call"
         const val CHANNEL_MISSED = "missed_call"
         const val NOTIFICATION_ID = 4101
         private const val MISSED_ID_BASE = 4200
+        private val CALL_COLOR = AndroidColor.rgb(0, 82, 88)
         const val EXTRA_EVENT_ID = "event_id"
         const val ACTION_DECLINE = "com.callstudio.app.action.DECLINE"
         const val ACTION_END = "com.callstudio.app.action.END"

@@ -16,6 +16,7 @@ import com.callstudio.app.domain.CallEvent
 import com.callstudio.app.domain.CallStateMachine
 import com.callstudio.app.domain.CallStatus
 import com.callstudio.app.notifications.NotificationHelper
+import com.callstudio.app.permissions.DoNotDisturb
 import com.callstudio.app.permissions.SystemAccess
 import com.callstudio.app.preferences.SettingsStore
 import com.callstudio.app.preferences.VoicePlayMode
@@ -172,7 +173,9 @@ class CallSessionManager(
             "event=${e.id} late=${(System.currentTimeMillis() - e.triggerAtMillis) / 1000}s notification=${if (shown) "shown" else "NOT shown"} " +
                 "service=${if (serviceStarted) "started" else "REFUSED"} ${systemState()}",
         )
-        // 3) ring and vibrate right now, in the way this phone rings for a real call.
+        // 3) open the call screen over whatever is on screen, as a real call does (when Android allows it),
+        CallScreenLauncher.show(app, e.id)
+        // 4) ring and vibrate right now, in the way this phone rings for a real call.
         if (serviceStarted) startRingtoneLocked() else switchToSystemRing("Android refused to start the ringing service")
         val timeout = settings.current().ringTimeoutSeconds * 1000L
         ringTimeoutJob?.cancel()
@@ -189,6 +192,11 @@ class CallSessionManager(
 
     private suspend fun startRingtoneLocked() {
         if (_session.value.status != CallStatus.RINGING || ringingStarted || systemRing) return
+        if (dndRequiresSystemRing()) {
+            // Do Not Disturb would mute the app's own ringtone and vibration, but it lets the call channel through.
+            switchToSystemRing("Do Not Disturb is on, so the phone's own call alert rings instead")
+            return
+        }
         ringingStarted = true
         val st = settings.current()
         val result = withContext(Dispatchers.IO) {
@@ -212,6 +220,10 @@ class CallSessionManager(
         CallDiagnostics.log("Using the phone's own notification sound", "$reason; notification=${if (shown) "shown" else "NOT shown"}")
     }
 
+    /** True when Do Not Disturb would mute the app's own ringer but the call channel is allowed through it. */
+    private fun dndRequiresSystemRing(): Boolean =
+        DoNotDisturb.shouldRingViaSystem(DoNotDisturb.read(app), notifications.incomingChannelOverridesDnd())
+
     fun onServiceFailed() {
         scope.launch {
             mutex.withLock {
@@ -225,7 +237,7 @@ class CallSessionManager(
         scope.launch {
             mutex.withLock {
                 if (_session.value.status == CallStatus.RINGING && !CallService.isRunning) {
-                    if (systemRing) {
+                    if (systemRing && !dndRequiresSystemRing()) {
                         // The app is on screen now, so it may run its own ringer again instead of the system fallback.
                         // Cancelling the backup notification also stops its repeating sound.
                         systemRing = false
@@ -523,6 +535,9 @@ class CallSessionManager(
     private fun systemState(): String = try {
         "notifications=${if (SystemAccess.notificationsEnabled(app)) "on" else "OFF"} " +
             "alerts=${notifications.incomingChannelState()} " +
+            "dnd=${DoNotDisturb.describe(DoNotDisturb.read(app))} " +
+            "overridesDnd=${if (notifications.incomingChannelOverridesDnd()) "yes" else "no"} " +
+            "overOtherApps=${if (SystemAccess.canDrawOverOtherApps(app)) "yes" else "no"} " +
             "fullScreen=${if (SystemAccess.fullScreenAllowed(app)) "yes" else "NO"} " +
             "exactAlarms=${if (SystemAccess.exactAlarmsAllowed(app)) "yes" else "NO"} " +
             "batteryUnrestricted=${if (SystemAccess.ignoringBatteryOptimizations(app)) "yes" else "no"} " +

@@ -10,6 +10,7 @@ import com.callstudio.app.data.CallEventEntity
 import com.callstudio.app.data.CallerEntity
 import com.callstudio.app.domain.CallStatus
 import com.callstudio.app.domain.ScheduleSpec
+import com.callstudio.app.permissions.DoNotDisturb
 import com.callstudio.app.permissions.SystemAccess
 import com.callstudio.app.preferences.AppSettings
 import com.callstudio.app.scheduling.ScheduleCoordinator
@@ -100,5 +101,8 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
         else if (!c.notifications.incomingChannelAllowsPopUp()) add("Incoming-call alerts are turned down in Android settings")
         if (!SystemAccess.fullScreenAllowed(ctx)) add("Full-screen call screen is not allowed")
         if (!SystemAccess.exactAlarmsAllowed(ctx)) add("Exact timing is not allowed")
+        if (DoNotDisturb.mayStaySilent(DoNotDisturb.read(ctx), c.notifications.incomingChannelOverridesDnd())) {
+            add("Do Not Disturb is on, so calls may stay silent")
+        }
     }
 }
