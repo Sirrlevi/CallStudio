@@ -112,7 +112,7 @@ fun FakeOutgoingCallScreen(state: FakeCallState, actions: FakeOutgoingActions) {
     }
 
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
-    LaunchedEffect(state.phase) {
+    LaunchedEffect(state.phase, state.connectedElapsed) {
         if (state.phase == FakePhase.CONNECTED) {
             while (true) {
                 now = SystemClock.elapsedRealtime()

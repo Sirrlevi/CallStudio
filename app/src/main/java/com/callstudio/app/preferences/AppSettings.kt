@@ -5,7 +5,6 @@ import com.callstudio.app.ui.theme.CallTheme
 enum class RingtoneSource { DEFAULT, SYSTEM, CUSTOM, SILENT }
 
 enum class VoicePlayMode { AUTO_ONCE, AUTO_REPEAT, MANUAL }
-enum class NotificationBadgeStyle { ONLINE_DOT, APP_LOGO }
 
 /** Neon light that runs around the screen edge while a call is ringing. */
 enum class EdgeGlowStyle(val label: String) {
@@ -27,9 +26,6 @@ data class AppSettings(
     val keepScreenOn: Boolean = true,
     val ringTimeoutSeconds: Int = 45,
     val recordingSampleRate: Int = 16_000,
-    val notificationBadgeStyle: NotificationBadgeStyle = NotificationBadgeStyle.APP_LOGO,
-    /** False hides the badge icon (the app icon or the green dot) on the caller photo in call notifications. */
-    val notificationBadgeEnabled: Boolean = true,
     val lastCallerId: Long = -1L,
     /** When true, ring/vibrate exactly like a real call on this phone: silent, vibrate or ring (+ vibrate if the phone does). */
     val followPhoneRinger: Boolean = true,

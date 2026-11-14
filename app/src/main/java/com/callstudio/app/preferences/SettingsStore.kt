@@ -32,8 +32,6 @@ class SettingsStore(private val context: Context) {
         val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
         val RING_TIMEOUT = intPreferencesKey("ring_timeout_seconds")
         val SAMPLE_RATE = intPreferencesKey("recording_sample_rate")
-        val NOTIFICATION_BADGE = stringPreferencesKey("notification_badge_style")
-        val NOTIFICATION_BADGE_ENABLED = booleanPreferencesKey("notification_badge_enabled")
         val LAST_CALLER = longPreferencesKey("last_caller_id")
         val FOLLOW_PHONE_RINGER = booleanPreferencesKey("follow_phone_ringer")
         val EDGE_GLOW = stringPreferencesKey("edge_glow")
@@ -55,8 +53,6 @@ class SettingsStore(private val context: Context) {
                 keepScreenOn = p[K.KEEP_SCREEN_ON] ?: d.keepScreenOn,
                 ringTimeoutSeconds = p[K.RING_TIMEOUT] ?: d.ringTimeoutSeconds,
                 recordingSampleRate = p[K.SAMPLE_RATE] ?: d.recordingSampleRate,
-                notificationBadgeStyle = parse(p[K.NOTIFICATION_BADGE], d.notificationBadgeStyle),
-                notificationBadgeEnabled = p[K.NOTIFICATION_BADGE_ENABLED] ?: d.notificationBadgeEnabled,
                 lastCallerId = p[K.LAST_CALLER] ?: d.lastCallerId,
                 followPhoneRinger = p[K.FOLLOW_PHONE_RINGER] ?: d.followPhoneRinger,
                 edgeGlow = parse(p[K.EDGE_GLOW], d.edgeGlow),
@@ -85,19 +81,6 @@ class SettingsStore(private val context: Context) {
     suspend fun setKeepScreenOn(on: Boolean) { context.dataStore.edit { it[K.KEEP_SCREEN_ON] = on } }
     suspend fun setRingTimeout(seconds: Int) { context.dataStore.edit { it[K.RING_TIMEOUT] = seconds } }
     suspend fun setRecordingSampleRate(hz: Int) { context.dataStore.edit { it[K.SAMPLE_RATE] = hz } }
-    suspend fun setNotificationBadgeStyle(style: NotificationBadgeStyle) {
-        context.dataStore.edit { it[K.NOTIFICATION_BADGE] = style.name }
-        // NotificationHelper runs from a foreground service; mirror this visual-only value
-        // so it can read the selected badge synchronously while building a notification.
-        context.getSharedPreferences(NOTIFICATION_PREF_FILE, Context.MODE_PRIVATE)
-            .edit().putString(NOTIFICATION_PREF_KEY, style.name).apply()
-    }
-    suspend fun setNotificationBadgeEnabled(on: Boolean) {
-        context.dataStore.edit { it[K.NOTIFICATION_BADGE_ENABLED] = on }
-        // Mirrored for the same reason as the badge style: the notification is built synchronously.
-        context.getSharedPreferences(NOTIFICATION_PREF_FILE, Context.MODE_PRIVATE)
-            .edit().putBoolean(NOTIFICATION_PREF_ENABLED_KEY, on).apply()
-    }
 
     /** Where every call's timer starts, in seconds (0 = a normal timer). */
     suspend fun setCallTimerOffsetSeconds(seconds: Long) {
@@ -106,12 +89,6 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setLastCaller(id: Long?) {
         context.dataStore.edit { if (id == null) it.remove(K.LAST_CALLER) else it[K.LAST_CALLER] = id }
-    }
-
-    companion object {
-        const val NOTIFICATION_PREF_FILE = "notification_badge"
-        const val NOTIFICATION_PREF_KEY = "style"
-        const val NOTIFICATION_PREF_ENABLED_KEY = "enabled"
     }
 
     private inline fun <reified T : Enum<T>> parse(value: String?, default: T): T =

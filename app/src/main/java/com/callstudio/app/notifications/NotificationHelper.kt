@@ -27,8 +27,6 @@ import com.callstudio.app.R
 import com.callstudio.app.data.PhotoStore
 import com.callstudio.app.domain.PhoneNumbers
 import com.callstudio.app.permissions.SystemAccess
-import com.callstudio.app.preferences.NotificationBadgeStyle
-import com.callstudio.app.preferences.SettingsStore
 import com.callstudio.app.session.SessionState
 
 class NotificationHelper(private val context: Context, private val photos: PhotoStore) {
@@ -100,7 +98,7 @@ class NotificationHelper(private val context: Context, private val photos: Photo
             .setShowWhen(true)
             .setAutoCancel(true)
             .setContentIntent(open)
-        avatar(photoFile, greenDot = false)?.let { b.setLargeIcon(it) }
+        avatar(photoFile)?.let { b.setLargeIcon(it) }
         manager.notify(MISSED_ID_BASE + (eventId and 0xFFFL).toInt(), b.build())
     }
 
@@ -114,13 +112,12 @@ class NotificationHelper(private val context: Context, private val photos: Photo
         val open = activityIntent(s.eventId, answer = false)
         val answer = activityIntent(s.eventId, answer = true)
         val decline = broadcastIntent(s.eventId, ACTION_DECLINE, RequestCodes.DECLINE)
-        val badge = readPhotoBadge()
         val fullScreen = SystemAccess.fullScreenAllowed(context)
         val callStyle = foreground || fullScreen
-        val portrait = avatar(s.callerPhotoFile, greenDot = badge == PhotoBadge.GREEN_DOT)
+        val portrait = avatar(s.callerPhotoFile)
         val person = callerPerson(s, portrait)
         val b = NotificationCompat.Builder(context, if (backup) CHANNEL_BACKUP else CHANNEL_INCOMING)
-            .setSmallIcon(smallIcon(badge, callStyle))
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(s.displayName.ifBlank { "Unknown" })
             .setContentText("Incoming call")
             .setCategory(NotificationCompat.CATEGORY_CALL)
@@ -157,10 +154,9 @@ class NotificationHelper(private val context: Context, private val photos: Photo
     fun buildOngoing(s: SessionState): Notification {
         val hangUp = broadcastIntent(s.eventId, ACTION_END, RequestCodes.HANG_UP)
         val mute = broadcastIntent(s.eventId, ACTION_TOGGLE_MUTE, RequestCodes.MUTE)
-        val badge = readPhotoBadge()
-        val person = callerPerson(s, avatar(s.callerPhotoFile, greenDot = badge == PhotoBadge.GREEN_DOT))
+        val person = callerPerson(s, avatar(s.callerPhotoFile))
         return NotificationCompat.Builder(context, CHANNEL_ONGOING)
-            .setSmallIcon(smallIcon(badge, callStyle = true))
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(s.displayName.ifBlank { "Ongoing call" })
             .setContentText(if (s.recording.isActive) "Ongoing call · Recording" else "Ongoing call")
             .setCategory(NotificationCompat.CATEGORY_CALL)
@@ -197,35 +193,6 @@ class NotificationHelper(private val context: Context, private val photos: Photo
                 }
             }
             .build()
-    }
-
-    /** What the user chose to show in the corner of the caller's photo: the app's own icon, a green dot, or nothing. */
-    private enum class PhotoBadge { APP_ICON, GREEN_DOT, NONE }
-
-    /**
-     * In Android's call style the system draws the app's icon in the corner of the caller's photo, from the
-     * notification's small icon. A clear small icon leaves that corner empty: that is how the green-dot style (only the
-     * dot shows) and "icons off" (nothing shows) work. Some phones add their own app badge whatever the app does.
-     */
-    private fun smallIcon(badge: PhotoBadge, callStyle: Boolean): Int =
-        if (callStyle && badge != PhotoBadge.APP_ICON) R.drawable.ic_notification_clear else R.drawable.ic_notification
-
-    private fun readBadgeStyle(): NotificationBadgeStyle = runCatching {
-        val raw = context.getSharedPreferences(SettingsStore.NOTIFICATION_PREF_FILE, Context.MODE_PRIVATE)
-            .getString(SettingsStore.NOTIFICATION_PREF_KEY, NotificationBadgeStyle.APP_LOGO.name)
-        NotificationBadgeStyle.valueOf(raw ?: NotificationBadgeStyle.APP_LOGO.name)
-    }.getOrDefault(NotificationBadgeStyle.APP_LOGO)
-
-    /** False when the user switched the caller-photo icons off in Settings. */
-    private fun badgeSwitchedOn(): Boolean = runCatching {
-        context.getSharedPreferences(SettingsStore.NOTIFICATION_PREF_FILE, Context.MODE_PRIVATE)
-            .getBoolean(SettingsStore.NOTIFICATION_PREF_ENABLED_KEY, true)
-    }.getOrDefault(true)
-
-    private fun readPhotoBadge(): PhotoBadge = when {
-        !badgeSwitchedOn() -> PhotoBadge.NONE
-        readBadgeStyle() == NotificationBadgeStyle.ONLINE_DOT -> PhotoBadge.GREEN_DOT
-        else -> PhotoBadge.APP_ICON
     }
 
     /** Placeholder used only to satisfy the foreground-service contract when the call is already over. */
@@ -310,10 +277,10 @@ class NotificationHelper(private val context: Context, private val photos: Photo
     }
 
     /**
-     * Makes a true circular contact portrait. Nothing is painted on it except the optional green "online" dot: in
-     * Android's call style the system draws the app's real icon in the corner itself.
+     * Makes a true circular contact portrait. Nothing is painted on it: in Android's call style the system draws the
+     * app's real icon in the corner of the photo itself.
      */
-    private fun avatar(name: String?, greenDot: Boolean): Bitmap? {
+    private fun avatar(name: String?): Bitmap? {
         val file = photos.file(name) ?: return null
         return try {
             val source = BitmapFactory.decodeFile(file.path) ?: return null
@@ -336,17 +303,6 @@ class NotificationHelper(private val context: Context, private val photos: Photo
             canvas.restore()
             crop.recycle()
             if (source !== crop && !source.isRecycled) source.recycle()
-
-            if (greenDot) {
-                val cx = size * 0.79f
-                val cy = size * 0.79f
-                val radius = size * 0.17f
-                val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-                dotPaint.color = AndroidColor.WHITE
-                canvas.drawCircle(cx, cy, radius + 4f, dotPaint)
-                dotPaint.color = AndroidColor.rgb(46, 204, 96)
-                canvas.drawCircle(cx, cy, radius, dotPaint)
-            }
             output
         } catch (e: Exception) {
             null
