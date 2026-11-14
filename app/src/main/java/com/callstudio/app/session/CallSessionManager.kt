@@ -13,6 +13,7 @@ import com.callstudio.app.data.CallEventEntity
 import com.callstudio.app.data.RecordingRepository
 import com.callstudio.app.diag.CallDiagnostics
 import com.callstudio.app.domain.CallEvent
+import com.callstudio.app.domain.CallTimerOffset
 import com.callstudio.app.domain.CallStateMachine
 import com.callstudio.app.domain.CallStatus
 import com.callstudio.app.notifications.NotificationHelper
@@ -282,16 +283,19 @@ class CallSessionManager(
         ringingStarted = false
         systemRing = false
         notifications.cancelAll()
-        val now = System.currentTimeMillis()
-        calls.get(eventId)?.let { calls.update(it.copy(status = next.name, answeredAtMillis = now)) }
         val st = settings.current()
+        // "Ongoing call timer" (Settings): the call looks as if it began this long ago, so the timer in the notification,
+        // on every call screen and in the call history starts there and keeps running.
+        val head = CallTimerOffset.toMillis(st.callTimerOffsetSeconds)
+        val answeredAt = System.currentTimeMillis() - head
+        calls.get(eventId)?.let { calls.update(it.copy(status = next.name, answeredAtMillis = answeredAt)) }
         router.enterCall()
         if (st.startOnSpeaker) router.setSpeaker(true)
         _session.update {
             it.copy(
                 status = next,
-                answeredAtMillis = now,
-                answeredElapsed = SystemClock.elapsedRealtime(),
+                answeredAtMillis = answeredAt,
+                answeredElapsed = SystemClock.elapsedRealtime() - head,
                 speakerOn = router.isSpeakerOn(),
             )
         }

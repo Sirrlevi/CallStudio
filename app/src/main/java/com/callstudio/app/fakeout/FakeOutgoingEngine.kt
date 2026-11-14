@@ -8,6 +8,7 @@ import android.util.Log
 import com.callstudio.app.audio.AudioRouter
 import com.callstudio.app.audio.VoicePlayer
 import com.callstudio.app.audio.VoiceState
+import com.callstudio.app.domain.CallTimerOffset
 import com.callstudio.app.domain.Countries
 import com.callstudio.app.preferences.SettingsStore
 import com.callstudio.app.preferences.VoicePlayMode
@@ -278,7 +279,15 @@ class FakeOutgoingEngine(
     private suspend fun answered(req: FakeCallRequest, plan: FakeCallPlan, clipReady: Deferred<Boolean>?): Ending {
         tones.play(ToneSynth.connectPing())
         if (req.settings.vibrateOnAnswer) buzz()
-        _state.update { it.copy(phase = FakePhase.CONNECTED, connectedElapsed = SystemClock.elapsedRealtime()) }
+        // "Ongoing call timer" (Settings): the timer starts at that time instead of 0:00 and keeps running.
+        val head = try {
+            CallTimerOffset.toMillis(appSettings.current().callTimerOffsetSeconds)
+        } catch (c: CancellationException) {
+            throw c
+        } catch (t: Exception) {
+            0L
+        }
+        _state.update { it.copy(phase = FakePhase.CONNECTED, connectedElapsed = SystemClock.elapsedRealtime() - head) }
         // The other person says "Hello?" before anything is heard from them.
         if (sleep(plan.voiceDelayMs)) return hungUp()
         if (clipReady?.await() == true) voice.play()
